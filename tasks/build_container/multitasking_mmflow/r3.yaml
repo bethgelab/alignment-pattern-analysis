@@ -1,0 +1,4 @@
+dependencies:
+- repository: git@github.com:bethgelab/multitasking.git
+  branch: main
+  destination: multitasking

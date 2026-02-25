@@ -1,0 +1,19 @@
+feature_extraction:
+  model: clip/RN50
+  layers:
+    - image_encoder.layer1.0.relu3
+    - image_encoder.layer1.1.relu3
+    - image_encoder.layer1.2.relu3
+    - image_encoder.layer2.0.relu3
+    - image_encoder.layer2.1.relu3
+    - image_encoder.layer2.2.relu3
+    - image_encoder.layer3.0.relu3
+    - image_encoder.layer3.1.relu3
+    - image_encoder.layer3.2.relu3
+    - image_encoder.layer3.3.relu3
+    - image_encoder.layer3.4.relu3
+    - image_encoder.layer3.5.relu3
+    - image_encoder.layer4.0.relu3
+    - image_encoder.layer4.1.relu3
+    - image_encoder.layer4.2.relu3
+

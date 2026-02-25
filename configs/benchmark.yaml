@@ -1,0 +1,71 @@
+dataset:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/stimuli/stimulus_set/
+  name: bold_moments
+  resolution: 256
+  frame_rate: 4
+
+fmri:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  roi_names: [
+    "V1", "V2","V3", "V4", "V3A", "V3B", "V6", "V6A", "V7", "V8",
+    "FFC", "PIT", "IPS1", "MST", "MT", 
+    "FST", "LO1", "LO2", "LO3", 
+    "IP0", "IP1", "MIP", "VIP", "LIPd", "LIPv", "AIP", "7Pm", "7PL", "7PC", "7Am", "7AL",
+     "VVC", "VMV2","VMV3", "VMV1", "PHA2", "PHA3", "PH"
+  ]
+  sub_id: "all"
+  voxel_consistency_threshold: .2
+  apply_consistency_threshold: True
+
+feature_extraction:
+  model: taskonomy/autoencoding
+  layers:
+    - encoder.conv1
+    - encoder.layer1.0.conv2
+    # - encoder.layer1.2.conv3
+    - encoder.layer2.0.conv2
+    # - encoder.layer2.3.conv3
+    - encoder.layer3.0.conv2
+    # - encoder.layer3.5.conv3
+    - encoder.layer4.0.conv2
+    # - encoder.layer4.2.conv3
+    - encoder.compress1
+    - encoder.groupnorm
+  batch_size: 8
+  num_workers: 8
+  num_frames: 1
+
+feature_reduction:
+  method: srp
+  seed: 1234
+
+rsa:
+  enabled: True
+  dist_type: pearson
+  visualize_rdms: True
+
+versa:
+  enabled: False
+  dist_type: pearson
+  voxel_encoding:
+    method: ridge
+    one_alpha_per_voxel: False
+    params:
+      alphas: [100.0, 1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0]
+      fit_intercept: True
+      scoring: pearson
+      cv: 5
+
+procrustes:
+  enabled: False
+  frame_merge_strategy: average # only for datasets with data for multiple frames.  # concatenate or average or average_5 / 
+  score_function: frobenius # frobenius (similarity function) or angular (distance function)
+  n_components: 64 #98  # null or an integer
+  normalize_features: False # z-score / keep as False!
+  feature_reduction_method: pca
+  feature_reduction_seed: 1234
+  use_cv_ankhsoni_prokrustes: False # True # If enabled, n_components, normalize_features, feature_reduction_method and others are ignored.
+
+
+linear_predictivity:
+  enabled: True

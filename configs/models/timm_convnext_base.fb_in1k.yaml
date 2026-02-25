@@ -1,0 +1,18 @@
+feature_extraction:
+  model: timm/convnext_base.fb_in1k
+  layers:
+    - stages.0.blocks.0
+    - stages.0.blocks.2
+    - stages.1.blocks.2
+    - stages.2.blocks.1
+    - stages.2.blocks.4
+    - stages.2.blocks.6
+    - stages.2.blocks.9
+    - stages.2.blocks.11
+    - stages.2.blocks.14
+    - stages.2.blocks.17
+    - stages.2.blocks.19
+    - stages.2.blocks.22
+    - stages.2.blocks.24
+    - stages.3.blocks.0
+    - stages.3.blocks.2

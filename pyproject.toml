@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "multitasking"
+description = "Pipeline for evaluating models on brain alignment"
+authors = [
+  { name="Matthias Tangemann"},
+  { name="Lotta Piefke"},
+  { name="Larissa Höfling"},
+  { name="Susanne Keller"}
+]
+readme = "README.md"
+version = "1.0.0"
+requires-python = ">=3.10"
+dynamic = ["dependencies", "optional-dependencies"]
+
+
+[tool.mypy]
+exclude = ["multitasking/analyses/alignment_pattern.py",
+    "multitasking/analysis_scripts/iclr_analyses_aps_random_init.py",
+    "multitasking/analysis_scripts/iclr_analyses_aps_connectivity.py",
+    "multitasking/analysis_scripts/iclr_analyses_aps_trained_models.py",
+    "multitasking/analysis_scripts/iclr_analyses_aps_bm.py",
+    "multitasking/models/_extern",
+    "multitasking/notebooks",
+    "multitasking/plot_creation",
+    "output/.*",
+]
+
+
+[[tool.mypy.overrides]]
+module = ["multitasking.models._extern.*"]
+ignore_errors = true
+
+
+[[tool.mypy.overrides]]
+module = [
+    "benedict",
+    "clip",
+    "coloredlogs",
+    "executor",
+    "hcp_utils",
+    "joblib",
+    "mmaction.*",
+    "mmengine.*",
+    "mmflow.*",
+    "net2brain.*",
+    "numba.*",
+    "ot",
+    "scipy.*",
+    "sklearn.*",
+    "seaborn",
+    "timm.*",
+    "torchextractor",
+    "torchvision.models.resnet",
+    "torchvision.transforms.functional",
+    "vggt.*",
+    "visualpriors.*",
+]
+ignore_missing_imports = true
+
+
+[tool.ruff]
+lint.select = ["B", "D", "E", "W", "F", "FIX", "I", "T20"]
+lint.ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "E501"]
+lint.pydocstyle.convention = "google"
+exclude = ["_extern", "notebooks/**", "notebooks/boldmoments/**", "multitasking/plot_creation/**", "multitasking/analyses/alignment_pattern.py"]
+
+
+[tool.setuptools]
+packages = ["multitasking"]
+
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+
+[tool.setuptools.dynamic.optional-dependencies]
+dev = {file = ["requirements-dev.txt"]}

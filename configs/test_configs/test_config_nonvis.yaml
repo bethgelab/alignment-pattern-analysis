@@ -1,0 +1,7 @@
+fmri:
+  path: /mnt/lustre/work/bethge/bkr578/data/multitasking_objaverse/fmri_v2/
+  sub_id: sub-0001
+  sub_dir: delay_0_0_n_frames_18
+  roi_names: [
+    "V1", "PIT", "IPS1", "MT", "Pir", "4", "FOP1", "FEF", "A1"
+  ]

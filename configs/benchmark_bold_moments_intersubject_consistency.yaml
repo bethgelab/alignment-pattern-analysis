@@ -1,0 +1,63 @@
+data:
+  name: bold_moments
+
+dataset:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/stimuli/stimulus_set/
+  name: bold_moments
+  resolution: 256
+  frame_rate: 4
+
+fmri:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  # path: /mnt/lustre/work/bethge/bkr857/datasets/BOLDMoments/derivatives/versionB/fsLR32k/GLM/
+  sub_id: sub-03
+  roi_names: [
+    "V1", "V2","V3", "V4", "V3A", "V3B", "V6", "V6A", "V7", "V8",
+    "FFC", "PIT", "IPS1", "MST",  "MT", 
+    "FST", "LO1", "LO2", "LO3", "RSC",
+    "A1", "4", "Pir"
+  ]
+  test_set:
+    seed: 5298
+    size: .5  # half the dataset
+  z_score: True # 1 # Edit-edit: I've re-introduced this param! Data was z-scored by default.
+              # apply standard scaler to data if set to True
+
+feature_extraction:
+  # model: timm/resnet18.a1_in1k
+  model: all-other-subjects
+  # model: sub-02   # for single-subject to single-subject comparison
+  batch_size: 8
+  num_workers: 8
+  num_frames: 1
+
+feature_reduction:
+  method: srp
+  n_components: 512
+  seed: 1234
+
+rsa:
+  enabled: True
+  dist_type: pearson
+
+versa:
+  enabled: True
+  dist_type: pearson
+  voxel_encoding:
+    method: ridge
+    one_alpha_per_voxel: False
+    params:
+      alphas: [100.0, 1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0]
+      fit_intercept: True
+      scoring: pearson
+      cv: 5
+
+procrustes:
+  enabled: True
+  frame_merge_strategy: average # only for datasets with data for multiple frames.  # concatenate or average or average_5 / 
+  score_function: frobenius # frobenius (similarity function) or angular (distance function)
+  n_components: 64 #98  # null or an integer
+  normalize_features: False # z-score; default: False if not specified   
+  feature_reduction_method: srp
+  feature_reduction_seed: 1234
+  use_cv_ankhsoni_prokrustes: False # True # If enabled, n_components, normalize_features, feature_reduction_method and others are ignored.

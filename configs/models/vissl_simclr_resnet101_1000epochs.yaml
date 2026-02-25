@@ -1,0 +1,18 @@
+feature_extraction:
+  model: vissl/simclr_resnet101_1000epochs
+  layers:
+    - layer1.0
+    - layer1.2
+    - layer2.1
+    - layer3.0
+    - layer3.2
+    - layer3.4
+    - layer3.7
+    - layer3.9
+    - layer3.11
+    - layer3.14
+    - layer3.16
+    - layer3.18
+    - layer3.21
+    - layer4.0
+    - layer4.2

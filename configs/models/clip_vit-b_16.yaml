@@ -1,0 +1,15 @@
+feature_extraction:
+  model: clip/ViT-B/16
+  layers:
+    - image_encoder.transformer.resblocks.0
+    - image_encoder.transformer.resblocks.1
+    - image_encoder.transformer.resblocks.2
+    - image_encoder.transformer.resblocks.3
+    - image_encoder.transformer.resblocks.4
+    - image_encoder.transformer.resblocks.5
+    - image_encoder.transformer.resblocks.6
+    - image_encoder.transformer.resblocks.7
+    - image_encoder.transformer.resblocks.8
+    - image_encoder.transformer.resblocks.9
+    - image_encoder.transformer.resblocks.10
+    - image_encoder.transformer.resblocks.11

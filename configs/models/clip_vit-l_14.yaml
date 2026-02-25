@@ -1,0 +1,20 @@
+feature_extraction:
+  model: clip/ViT-L/14
+  layers:
+    - image_encoder.transformer.resblocks.0
+    - image_encoder.transformer.resblocks.1
+    - image_encoder.transformer.resblocks.3
+    - image_encoder.transformer.resblocks.4
+    - image_encoder.transformer.resblocks.6
+    - image_encoder.transformer.resblocks.8
+    - image_encoder.transformer.resblocks.9
+    - image_encoder.transformer.resblocks.11
+    - image_encoder.transformer.resblocks.13
+    - image_encoder.transformer.resblocks.14
+    - image_encoder.transformer.resblocks.16
+    - image_encoder.transformer.resblocks.18
+    - image_encoder.transformer.resblocks.19
+    - image_encoder.transformer.resblocks.21
+    - image_encoder.transformer.resblocks.23
+  batch_size: 4
+  num_workers: 4

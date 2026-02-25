@@ -1,0 +1,22 @@
+feature_extraction:
+  model: mmaction2/mvit-small-p244_32xb16-16x4x1-200e_kinetics400-rgb
+  layers:
+  - backbone.blocks.0
+  - backbone.blocks.1
+  - backbone.blocks.2
+  - backbone.blocks.3
+  - backbone.blocks.4
+  - backbone.blocks.5
+  - backbone.blocks.6
+  - backbone.blocks.7
+  - backbone.blocks.8
+  - backbone.blocks.9
+  - backbone.blocks.10
+  - backbone.blocks.11
+  - backbone.blocks.12
+  - backbone.blocks.13
+  - backbone.blocks.14
+  - backbone.blocks.15
+  batch_size: 1
+  num_workers: 1
+  num_frames: null
