@@ -11,21 +11,18 @@ import numpy as np
 import pandas as pd
 from benedict import benedict
 
-from multitasking.compute_procrustes import compute_procrustes
 from multitasking.datasets import build_dataset
 from multitasking.fmri_data.voxel_consistency import (
     filter_by_voxel_consistency,
     get_roi_wise_voxel_consistency,
 )
 from multitasking.metrics import RSA, LinearPredictivity
-from multitasking.metrics.anshksoni_metrics import AnshKSoniMetric
 from multitasking.utils.file_handling import config_hash
 from multitasking.utils.get_representations import (
     compute_model_representation,
     get_flat_representation,
 )
 from multitasking.utils.plotting import plot_rdm
-from multitasking.utils.ridge_cv import run_ridge_cv
 
 LOGGER = logging.getLogger(__name__)
 
@@ -234,8 +231,6 @@ def benchmark(
                     )
                 LOGGER.warning("Shuffled fMRI data wrt the model data.")
 
-            n_frames = 1
-
             compute_rsa(
                 config,
                 split_model_representation,
@@ -245,32 +240,6 @@ def benchmark(
                 splits,
                 output_path=output_dir,
                 subject_id=subject_id,
-            )
-
-            compute_versa(
-                split_model_representation,
-                split_brain_representation,
-                layers,
-                rois,
-                splits,
-                config,
-                output_path=output_dir,
-                subject_id=subject_id,
-            )
-
-            compute_procrustes(
-                split_model_representation,
-                split_brain_representation,
-                layers,
-                rois,
-                splits,
-                config,
-                overwrite_score=config["overwrite"],
-                n_frames=n_frames,
-                use_cv_ankhsoni_prokrustes=config["procrustes"].get(
-                    "use_cv_ankhsoni_prokrustes",
-                    False,
-                ),
             )
 
             compute_linear_predictivity(
@@ -283,20 +252,6 @@ def benchmark(
                 output_path=output_dir,
                 subject_id=subject_id,
             )
-
-            if config.get("anshksoni_metrics", []):
-                for metric_name in config.get("anshksoni_metrics", []).keys():
-                    compute_anshksoni_metric(
-                        metric_name,
-                        split_model_representation,
-                        split_brain_representation,
-                        layers,
-                        rois,
-                        splits,
-                        config,
-                        output_path=output_dir,
-                        subject_id=subject_id,
-                    )
 
     else:
         raise ValueError(f"Dataset {dataset_key} not supported!")
@@ -403,113 +358,6 @@ def compute_rsa(
         LOGGER.info("Visualizing RDMs completed.")
 
 
-def compute_versa(
-    model_representations,
-    brain_representations,
-    layers,
-    rois,
-    splits,
-    config,
-    output_path: Path,
-    subject_id: str,
-) -> None:
-    """Update docstring."""
-    if not config.get("versa.enabled", False):
-        LOGGER.info("veRSA is disabled. Skipping veRSA computation.")
-        return
-
-    LOGGER.info("Computing veRSA ...")
-
-    LOGGER.info("Fitting ridge regression ...")
-    layers_x_rois = list(itertools.product(layers, rois))
-    results = {layer: {roi: None for roi in rois} for layer in layers}
-    for layer, roi in layers_x_rois:
-        LOGGER.info(f"Fitting ridge regression for {layer} and {roi} ...")
-        results[layer][roi] = run_ridge_cv(
-            x_train=model_representations[
-                f"train_{layer}"
-            ],  # x_train/the design matrix
-            x_test=model_representations[f"test_{layer}"],
-            y_train=brain_representations[f"train_{roi}"],
-            y_test=brain_representations[f"test_{roi}"],
-            cv_settings=dict(config["versa"]["voxel_encoding"]["params"]),
-            method=config["versa"]["voxel_encoding"]["method"],
-            parallelise=config["versa"]["voxel_encoding"].get("parallelise", False),
-            one_alpha_per_voxel=config["versa"]["voxel_encoding"][
-                "one_alpha_per_voxel"
-            ],
-        )
-
-    predicted_brain_representations = {
-        f"{split}_{layer}_{roi}": results[layer][roi]["predictions"][split]  # type: ignore  # noqa: E501
-        for split in splits
-        for layer in layers
-        for roi in rois
-    }
-    LOGGER.info("Fitting ridge regression completed.")
-
-    LOGGER.info("Computing RSA scores ...")
-    rsa = RSA()
-
-    predicted_brain_rdms: dict[str, np.ndarray] = {}
-    brain_rdms: dict[str, np.ndarray] = {}
-    scores: list[dict[str, Any]] = []
-
-    for split in splits:
-        for layer in layers:
-            for roi in rois:
-                features1 = predicted_brain_representations[f"{split}_{layer}_{roi}"]
-                features2 = brain_representations[f"{split}_{roi}"]
-                score, details = rsa(features1, features2)
-
-                scores.append(
-                    {
-                        "model": config["feature_extraction"]["model"],
-                        "layer": layer,
-                        "roi": roi,
-                        "split": split,
-                        "subject": subject_id,
-                        "metric": "rsa",
-                        "score": score,
-                    }
-                )
-
-                assert isinstance(details["rdm1"], np.ndarray)
-                assert isinstance(details["rdm2"], np.ndarray)
-                predicted_brain_rdms[f"{split}_{layer}_{roi}"] = details["rdm1"]
-                brain_rdms[f"{split}_{roi}"] = details["rdm2"]
-
-    scores_path = output_path / "scoresheets" / f"scores_versa_{subject_id}.csv"
-    scores_path.parent.mkdir(parents=True, exist_ok=True)
-    scores_df = pd.DataFrame(scores)
-    scores_df.to_csv(scores_path, index=False)
-    LOGGER.info(f"Computing veRSA completed.\n{scores_df}")
-
-    LOGGER.info("Visualizing RDMs ...")
-    rdm_heatmaps_path = output_path / "rdm_heatmaps"
-    rdm_heatmaps_path.mkdir(parents=True, exist_ok=True)
-
-    model_name = config["feature_extraction"]["model"]
-    for split, layer, roi in itertools.product(splits, layers, rois):
-        predicted_brain_rdm = predicted_brain_rdms[f"{split}_{layer}_{roi}"]
-        plot_rdm(
-            predicted_brain_rdm,
-            title=f"RDM for model '{model_name}',  layer '{layer}' and roi '{roi}' ({split} set)",  # noqa: E501
-            output_path=rdm_heatmaps_path
-            / f"predicted_brain_rdm_{layer}_{roi}_{split}.png",  # noqa: E501
-        )
-
-    for split, roi in itertools.product(splits, rois):
-        brain_rdm = brain_rdms[f"{split}_{roi}"]
-        plot_rdm(
-            brain_rdm,
-            title=f"RDM for brain region '{roi}' ({split} set)",
-            output_path=rdm_heatmaps_path / f"brain_rdm_{roi}_{split}.png",
-        )
-
-    LOGGER.info("Visualizing RDMs completed.")
-
-
 def compute_linear_predictivity(
     model_representations,
     brain_representations,
@@ -610,104 +458,6 @@ def compute_linear_predictivity(
     scores_df.to_csv(scores_path, index=False)
 
     LOGGER.info(f"Computing linear predictivity completed.\n{scores_df}")
-
-
-
-
-def compute_anshksoni_metric(
-    metric_name: str,
-    model_representations,
-    brain_representations,
-    layers,
-    rois,
-    splits,
-    config,
-    output_path: Path,
-    subject_id: str,
-) -> None:
-    if not config.get(f"anshksoni_metrics.{metric_name}.enabled", False):
-        LOGGER.info(
-           f"AnshKSoni metric {metric_name} is disabled. Skipping its computation."
-        )
-        return
-
-    LOGGER.info(f"Computing AnshKSoni metric {metric_name} ...")
-
-    kwargs = {
-        key: value
-        for key, value in config["anshksoni_metrics"][metric_name].items()
-        if key != "enabled"
-    }
-
-    scores: list[dict[str, Any]] = []
-
-    model_path = output_path / metric_name / "models"
-    model_path.mkdir(parents=True, exist_ok=True)
-
-    for layer in layers:
-        for roi in rois:
-            anshksoni_metric = AnshKSoniMetric(metric_name, **kwargs)
-            for split in splits:
-                features1 = model_representations[f"{split}_{layer}"]
-                features2 = brain_representations[f"{split}_{roi}"]
-                if split == "train":
-                    #  For train, fit the model
-                    try:
-                        score, details = anshksoni_metric(features1, features2)
-                    except BaseException as e:
-                        LOGGER.error(f"Error fitting AnshKSoni metric "
-                            f"{metric_name} for {roi}, {layer}, {split}: {e}")
-                        score = np.nan
-                    train_score = score
-                else:
-                    #  For test, evaluate the model
-                    if np.isnan(score):
-                        score = np.nan # e.g. if one featuremap has 0 feature dims
-                    else:
-                        score = anshksoni_metric.evaluate( # type: ignore
-                                features1, features2
-                        )
-                    test_scores = score
-
-                scores.append(
-                    {
-                        "model": config["feature_extraction"]["model"],
-                        "layer": layer,
-                        "roi": roi,
-                        "split": split,
-                        "subject": subject_id,
-                        "metric": "anshksoni_"+metric_name.lower(),
-                        "n_features_1_model": features1.shape[-1],
-                        "n_features_2_brain": features2.shape[-1],
-                        "score": np.nanmean(score),
-                        "test_scores_list": (score if split == "test" else None)
-                    }
-                )
-
-            # Commented out since file becomes WAY too large (5TB total)
-            # Need to figure out what uses so much storage before
-            # re-enabling
-            # # package = {
-            # #     "alphas": details["alphas"],
-            # # }
-            # dump_path = (model_path /
-            #                 f"fit_details_{subject_id}_{roi}_{layer}.pkl")
-            # joblib.dump(details, dump_path)
-
-            LOGGER.info(
-                f"{roi}, {layer},"
-                f" train score: {train_score:.2f}, test_score: "
-                f"{np.nanmean(test_scores):.2f}"
-            )
-    scores_path = (
-        output_path / "scoresheets" / f"scores_anshksoni_{metric_name}_{subject_id}.csv"
-    )
-    scores_path.parent.mkdir(parents=True, exist_ok=True)
-    scores_df = pd.DataFrame(scores)
-    scores_df.to_csv(scores_path, index=False)
-
-    LOGGER.info(f"Computing AnshKSoni metric {metric_name} completed.\n{scores_df}")
-
 
 
 

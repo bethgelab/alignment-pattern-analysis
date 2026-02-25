@@ -4,8 +4,8 @@ Taskonomy to brain prediction with a focus on multi-image tasks and the dorsal s
 
 ## Code Release To-Do List
 
-- [ ] Remove unused models
-- [ ] Remove unused metrics
+- [x] Remove unused models
+- [x] Remove unused metrics
 - [ ] Remove unused model api endpoints (demo, FAVORITE_MODELS, default layers?)
 - [ ] Clean up analysis scripts
 - [ ] Clean up plotting script
