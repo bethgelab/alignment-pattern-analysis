@@ -2,6 +2,15 @@
 Taskonomy to brain prediction with a focus on multi-image tasks and the dorsal stream
 
 
+## Code Release To-Do List
+
+- [ ] Remove unused models
+- [ ] Remove unused metrics
+- [ ] Remove unused model api endpoints (demo, FAVORITE_MODELS, default layers?)
+- [ ] Clean up analysis scripts
+- [ ] Clean up plotting script
+
+
 ## Prerequisites
 Build the Singularity container for this project:
 
