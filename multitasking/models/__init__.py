@@ -97,7 +97,6 @@ def list_providers() -> list[str]:
     return [
         "clip",
         "mmaction2",
-        "mmflow",
         "opt_cwm",
         "taskonomy",
         "timm",
