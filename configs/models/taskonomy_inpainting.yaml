@@ -1,0 +1,18 @@
+feature_extraction:
+  model: taskonomy/inpainting
+  layers:
+    - encoder.layer1.0.relu
+    - encoder.layer1.1.relu
+    - encoder.layer1.2.relu
+    - encoder.layer2.0.relu
+    - encoder.layer2.1.relu
+    - encoder.layer2.2.relu
+    - encoder.layer3.0.relu
+    - encoder.layer3.1.relu
+    - encoder.layer3.2.relu
+    - encoder.layer3.3.relu
+    - encoder.layer3.4.relu
+    - encoder.layer3.5.relu
+    - encoder.layer4.0.relu
+    - encoder.layer4.1.relu
+    - encoder.layer4.2.relu

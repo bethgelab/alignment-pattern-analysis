@@ -1,0 +1,17 @@
+feature_extraction:
+  model: mmaction2/timesformer_jointST_8xb8-8x32x1-15e_kinetics400-rgb
+  layers:
+  - backbone.transformer_layers.layers.0
+  - backbone.transformer_layers.layers.1
+  - backbone.transformer_layers.layers.2
+  - backbone.transformer_layers.layers.3
+  - backbone.transformer_layers.layers.4
+  - backbone.transformer_layers.layers.5
+  - backbone.transformer_layers.layers.6
+  - backbone.transformer_layers.layers.7
+  - backbone.transformer_layers.layers.8
+  - backbone.transformer_layers.layers.9
+  - backbone.transformer_layers.layers.10
+  - backbone.transformer_layers.layers.11
+  batch_size: 1
+  num_workers: 1

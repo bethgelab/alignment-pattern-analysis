@@ -1,0 +1,13 @@
+feature_extraction:
+  model: mmaction2/swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb
+  layers:
+  - backbone.layers.0
+  - backbone.layers.1
+  - backbone.layers.2.blocks.1
+  - backbone.layers.2.blocks.2
+  - backbone.layers.2.blocks.3
+  - backbone.layers.2.blocks.4
+  - backbone.layers.2.blocks.5
+  - backbone.layers.3
+  batch_size: 1
+  num_workers: 1

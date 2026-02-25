@@ -1,0 +1,21 @@
+feature_extraction:
+  model: v_jepa/vjepa2_vit_huge
+  layers:
+    - blocks.0
+    - blocks.2
+    - blocks.4
+    - blocks.6
+    - blocks.9
+    - blocks.11
+    - blocks.13
+    - blocks.15
+    - blocks.18
+    - blocks.20
+    - blocks.22
+    - blocks.25
+    - blocks.27
+    - blocks.29
+    - blocks.31
+  batch_size: 1
+
+    

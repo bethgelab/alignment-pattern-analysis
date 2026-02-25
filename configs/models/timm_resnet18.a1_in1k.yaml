@@ -1,0 +1,11 @@
+feature_extraction:
+  model: timm/resnet18.a1_in1k
+  layers:
+    - layer1.0
+    - layer1.1
+    - layer2.0
+    - layer2.1
+    - layer3.0
+    - layer3.1
+    - layer4.0
+    - layer4.1

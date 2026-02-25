@@ -1,0 +1,122 @@
+Bootstrap: docker
+From: nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
+
+
+%environment
+    export PATH=/opt/conda/bin:$PATH
+
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update
+    apt-get install -yq --no-install-recommends \
+        bash-completion \
+        build-essential \
+        ca-certificates \
+        cmake \
+        curl \
+        ffmpeg \
+        git \
+        git-lfs \
+        htop \
+        less \
+        libsm6 \
+        locales \
+        openssh-client \
+        unzip \
+        vim \
+        wget \
+        xz-utils \
+        zlib1g-dev
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+    locale-gen "en_US.UTF-8"
+
+    git lfs install
+
+
+    # --- Dropbear ---
+    export DROPBEAR_VERSION="2025.87"
+    curl -O https://matt.ucc.asn.au/dropbear/releases/dropbear-${DROPBEAR_VERSION}.tar.bz2 
+    tar -xjf dropbear-${DROPBEAR_VERSION}.tar.bz2
+    cd dropbear-${DROPBEAR_VERSION}
+    ./configure
+    make
+    make install
+    cd ..
+    rm -rf dropbear-${DROPBEAR_VERSION}
+    rm dropbear-${DROPBEAR_VERSION}.tar.bz2
+
+
+    # --- Miniconda ----
+    # https://repo.anaconda.com/miniconda/
+    export CONDA_PATH="/opt/conda"
+    export PATH="$CONDA_PATH/bin:$PATH"
+    export MINICONDA_RELEASE="Miniconda3-py312_25.1.1-2-Linux-x86_64.sh"
+    export MINICONDA_CHECKSUM="4766d85b5f7d235ce250e998ebb5a8a8210cbd4f2b0fea4d2177b3ed9ea87884"
+    
+    wget --quiet https://repo.anaconda.com/miniconda/$MINICONDA_RELEASE
+    echo "$MINICONDA_CHECKSUM  $MINICONDA_RELEASE" | sha256sum --check --status
+    /bin/bash $MINICONDA_RELEASE -f -b -p $CONDA_PATH
+    rm $MINICONDA_RELEASE
+
+
+    # --- Python dependencies ---
+    pip install --no-cache-dir \
+        click==8.1.8 \
+        "clip @ git+https://github.com/openai/CLIP.git" \
+        coloredlogs==15.0.1 \
+        dacite==1.9.2 \
+        easydict==1.13 \
+        einops==0.8.1 \
+        executor==23.2 \
+        hcp_utils==0.1.0 \
+        imageio[pyav,ffmpeg]==2.37.0 \
+        ipykernel==6.29.5 \
+        "mmengine @ git+https://github.com/open-mmlab/mmengine.git@v0.10.7" \
+        "net2brain @ git+https://github.com/cvai-roig-lab/Net2Brain.git" \
+        nibabel==5.3.2 \
+        nilearn==0.11.1 \
+        numba==0.61.2 \
+        pydantic==2.11.4 \
+        pytest==8.3.5 \
+        python-benedict==0.34.1 \
+        questionary==2.1.0 \
+        ruff==0.11.8 \
+        seaborn==0.12.2 \
+        timm==0.4.12 \
+        torch==2.6.0 \
+        torchextractor==0.3.0 \
+        torchvision==0.21.0 \
+        transformers==4.30.2 \
+        "vggt @ git+https://github.com/facebookresearch/vggt.git" \
+        visualpriors==0.3.5
+
+    pip install --no-cache-dir \
+        mypy==1.17.1 \
+        pandas-stubs==2.3.0.250703 \
+        pre-commit==4.3.0 \
+        pytest==8.4.1 \
+        pytest-cov==6.2.1 \
+        ruff==0.12.7 \
+        tqdm-stubs==0.2.1 \
+        types-pycocotools==2.0.0.20250111 \
+        types-pyyaml==6.0.12.20250516
+
+    # Building MMCV may take some time. Be patient.
+    # This has to be done *after* torch and torchvision are installed. Otherwise, this
+    # will install fine but complain about missing `mmcv._ext` later.
+    MMCV_WITH_OPS=1 FORCE_CUDA="1" TORCH_CUDA_ARCH_LIST="Volta;Turing;Ampere" \
+        pip install git+https://github.com/open-mmlab/mmcv.git@v2.1.0
+
+    # We additionally need the base config files, so we clone the repository explicitely
+    # and install the package from there.
+    # Some source files related to DRN are not copied to site-packages which results in
+    # an error. To fix this, we use an editable install.
+    # See https://github.com/open-mmlab/mmaction2/issues/2714
+    cd /opt
+    git clone https://github.com/open-mmlab/mmaction2.git
+    cd mmaction2
+    git checkout v1.2.0
+    pip install -e .

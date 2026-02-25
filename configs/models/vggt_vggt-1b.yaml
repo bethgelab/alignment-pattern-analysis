@@ -1,0 +1,24 @@
+dataset:
+  frame_rate: 1.5
+
+feature_extraction:
+  model: vggt/VGGT-1B
+  layers:
+    - aggregator.patch_embed.blocks.0
+    - aggregator.patch_embed.blocks.1
+    - aggregator.patch_embed.blocks.3
+    - aggregator.patch_embed.blocks.5
+    - aggregator.patch_embed.blocks.6
+    - aggregator.patch_embed.blocks.8
+    - aggregator.patch_embed.blocks.10
+    - aggregator.patch_embed.blocks.11
+    - aggregator.patch_embed.blocks.13
+    - aggregator.patch_embed.blocks.15
+    - aggregator.patch_embed.blocks.17
+    - aggregator.patch_embed.blocks.18
+    - aggregator.patch_embed.blocks.20
+    - aggregator.patch_embed.blocks.22
+    - aggregator.patch_embed.blocks.23
+  batch_size: 1
+  num_workers: 1
+  resolution: [8, 8]

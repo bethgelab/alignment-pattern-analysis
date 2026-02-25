@@ -1,0 +1,8 @@
+__pycache__
+*.sif
+*.pkl
+*.egg-info/
+
+*/cache
+output/
+data/

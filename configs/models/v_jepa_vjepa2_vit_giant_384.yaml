@@ -1,0 +1,21 @@
+feature_extraction:
+  model: v_jepa/vjepa2_vit_giant_384
+  layers:
+    - blocks.0
+    - blocks.2
+    - blocks.5
+    - blocks.8
+    - blocks.11
+    - blocks.14
+    - blocks.17
+    - blocks.19
+    - blocks.22
+    - blocks.25
+    - blocks.28
+    - blocks.31
+    - blocks.34
+    - blocks.37
+    - blocks.39
+  batch_size: 1
+
+

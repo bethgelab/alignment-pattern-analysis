@@ -1,0 +1,26 @@
+slurm:
+  # The model will run on a 2080Ti as well, but is ~2.5x slower (feature extraction
+  # takes ~9h vs ~3.5h)
+  partition: 2080-galvani
+
+dataset:
+  frame_rate: 1.5
+
+feature_extraction:
+  model: opt_cwm/opt_cwm
+  layers:
+    - cwm_model.encoder.blocks.0
+    - cwm_model.encoder.blocks.1
+    - cwm_model.encoder.blocks.2
+    - cwm_model.encoder.blocks.3
+    - cwm_model.encoder.blocks.4
+    - cwm_model.encoder.blocks.5
+    - cwm_model.encoder.blocks.6
+    - cwm_model.encoder.blocks.7
+    - cwm_model.encoder.blocks.8
+    - cwm_model.encoder.blocks.9
+    - cwm_model.encoder.blocks.10
+    - cwm_model.encoder.blocks.11
+  batch_size: 1
+  num_workers: 1
+  resolution: [8, 8]
