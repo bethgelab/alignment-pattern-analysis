@@ -1,0 +1,11 @@
+__pycache__
+*.sif
+*/cache
+*/output
+output/
+*.pkl
+*.egg-info/
+output/
+thirdparty/
+/data/
+/tasks/gridsearch/configs/*

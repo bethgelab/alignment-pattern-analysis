@@ -35,7 +35,11 @@ Download the bold moments dataset to the `datasets` directory. **TODO: Add more 
 Use the [`multitasking.benchmark`](multitasking/benchmark.py) script to evaluate models:
 
 ```bash
-python -m multitasking.benchmark --config configs/benchmark.yaml
+# Evaluate all models
+python -m multitasking.benchmark
+
+# Evaluate a specific model
+python -m multitasking.benchmark --model timm/resnet18.a1_in1k
 ```
 
 ### Leave-one-out inter-subject comparison

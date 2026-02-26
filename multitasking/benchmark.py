@@ -28,14 +28,18 @@ LOGGER = logging.getLogger(__name__)
 
 SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 
+PROJECT_ROOT = Path(__file__).parent.parent
+CONFIG_ROOT = PROJECT_ROOT / "configs"
+
 
 @click.command()
 @click.option(
     "--config",
     "config_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
+    default=CONFIG_ROOT / "benchmark.yaml",
 )
+@click.option("--model", default="all")
 @click.option(
     "--output-dir",
     "output_dir",
@@ -60,6 +64,7 @@ SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 )
 def benchmark(
     config_path: Path,
+    model: str,
     output_dir: Path,
     cache_dir: Path,
     overwrite: bool,
@@ -79,7 +84,34 @@ def benchmark(
             "--overwrite-cache.",
         )
 
-    config = benedict.from_yaml(config_path)
+    base_config = benedict.from_yaml(config_path)
+
+    model_configs = {}
+    for path in (CONFIG_ROOT / "models").glob("*.yaml"):
+        model_config = benedict.from_yaml(path)
+        model_name = model_config["feature_extraction.model"]
+        model_configs[model_name] = model_config
+    if model != "all":
+        model_configs = {model: model_configs[model]}
+
+    for model_index, (model_name, model_config) in enumerate(model_configs.items()):
+        LOGGER.info(
+            f"Benchmarking model: {model_name} ... "
+            f"({model_index + 1} of {len(model_configs)})"
+        )
+        full_config = base_config.deepcopy()
+        full_config.merge(model_config)
+        benchmark_model(full_config, output_dir, cache_dir, overwrite, overwrite_cache)
+
+
+def benchmark_model(
+    config: benedict,
+    output_dir: Path,
+    cache_dir: Path,
+    overwrite: bool,
+    overwrite_cache: bool,
+) -> None:
+    """Benchmarks a single model."""
     LOGGER.info(config)
     config_str = (
         "model_"
