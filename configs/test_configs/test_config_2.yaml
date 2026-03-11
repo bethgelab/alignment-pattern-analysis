@@ -1,6 +1,0 @@
-fmri:
-  path: /mnt/lustre/work/bethge/bkr578/data/multitasking_objaverse/fmri/
-  sub_id: sub-0001
-  roi_names: [
-    "MT", "V1"
-  ]
