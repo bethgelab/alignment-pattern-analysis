@@ -1,20 +1,9 @@
-# multitasking
-Taskonomy to brain prediction with a focus on multi-image tasks and the dorsal stream
+# Alignment Pattern Analysis
+
+This repository provides the code for the ICLR 2026 paper [Only Brains Align with Brains: Cross-Region Alignment Patterns Expose Limits of Normative Models](https://openreview.net/forum?id=cMGJcHHI7d).
 
 
-## Code Release To-Do List
-
-- [x] Remove unused models
-- [x] Remove unused metrics
-- [ ] Remove unused model api endpoints (demo, FAVORITE_MODELS, default layers?)
-- [ ] Clean up analysis scripts
-- [ ] Clean up plotting script
-- [ ] Remove all slurm-related code
-- [ ] Remove tasks and use benchmark as single entry point
-- [ ] Add license
-
-
-## Installation
+## Preliminaries
 Setup a virtual environment and install the python package provided by this repository.
 
 We provide a definition file for a singularity container that can be built using the
@@ -24,11 +13,10 @@ following command:
 singularity build --fakeroot singularity/container.sif singularity/container.def
 ```
 
-Download the bold moments dataset to the `datasets` directory. **TODO: Add more precise instructions**.
+Download the bold moments dataset to the `datasets` directory.
 
 
 ## Evaluating models
-**TODO: Revise once there's a clean entry point to the benchmark**
 
 Use the [`multitasking.benchmark`](multitasking/benchmark.py) script to evaluate a
 single model:
@@ -64,23 +52,13 @@ unique pairs, and with 6+ pairs per subject that is not possible.
 
 
 
-## Visualizing results
-**TODO: Revise plotting instruction**
-
-You can create an overview plot for BOLDMoments benchmarking results using 
-```console
-python -m multitasking.plot_creation.summary_plots --output-supdir path/to/benchmarking/results --filename scores_rsa.csv --plot-path /path/where/to/save/plots 
-```
-`--output-supdir`: the directory that contains subdirectories with your results like so: output_supdir/{hash}/scoresheets/scores_rsa.csv
-
-`--plot-path`: directory where you want to save your plots & results files
-
-This defaults to using the test split.
-
-To add a noise ceiling, add an option:
-`--intersubject-supdir` pointing to the intersubject results to use as noise ceiling. Note this currently doesn't check for the right subject being used. 
-
-
-
 ## Citation
-**TODO: Add bibtex reference and code for our paper**
+```bibtex
+@inproceedings{
+  title={Only Brains Align with Brains: Cross-Region Alignment Patterns Expose Limits of Normative Models},
+  author={H{\"o}fling, Larissa and Tangemann, Matthias and Piefke, Lotta and Keller, Susanne and Bethge, Matthias and Franke, Katrin},
+  booktitle={ICLR},
+  year={2026},
+  url={https://openreview.net/forum?id=cMGJcHHI7d}
+}
+```
