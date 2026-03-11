@@ -1,8 +1,0 @@
-dependencies:
-- find_latest:
-    path: container/objaverse
-  source: output/container.sif
-  destination: container.sif
-- repository: git@github.com:bethgelab/multitasking.git
-  branch: objaverse
-  destination: multitasking
