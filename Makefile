@@ -1,13 +1,12 @@
 .PHONY: lint mypy ruff fix test
 
-lint:
-	pre-commit run --all-files
+lint: ruff mypy
 
 mypy:
-	pre-commit run mypy --all-files
+	mypy .
 
 ruff:
-	pre-commit run ruff --all-files
+	ruff check .
 
 fix:
 	ruff check --fix
