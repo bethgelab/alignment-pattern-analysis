@@ -15,7 +15,7 @@ import click
 from benedict import benedict
 from executor import execute
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 CONFIG_ROOT = PROJECT_ROOT / "configs"
 
 
@@ -84,31 +84,11 @@ def run_benchmark(
 def prepare_container(output_path: Path):
     """Prepares the containers for running the benchmark."""
     click.echo("Symlinking containers...")
-    for variant in ["mmflow", "mmaction2"]:
-        if variant == "mmflow":
-            source = Path("/mnt/lustre/work/bethge/bkr857/projects/multitasking/" \
-                          "singularity/multitasking_mmflow_ot.sif")
-        else:
-            source = Path("/mnt/lustre/work/bethge/bkr857/projects/multitasking/" \
-                          "singularity/multitasking_mmaction2_ot.sif")
-        if not source.exists():
-            # If OT containers not found: Use previous containers
-            click.echo(f"Container {source} not found. Falling back to container "
-                            "without optimal transport package.")
-            if variant == "mmflow":
-                source = Path("/mnt/lustre/work/bethge/mtangemann/data/multitasking/" \
-                            "jobs/6f66a164-d3fd-4e21-bdcf-fda36fe707ee/output/container.sif")
-            else:
-                click.echo(
-                    "I failed to re-build the mmaction2 container (even without ot). "
-                    "Continuing to use Matthias T's container."
-                )
-                source = Path("/mnt/lustre/work/bethge/mtangemann/data/multitasking/" \
-                            "jobs/f1542c35-40a6-4808-8818-3d61abcc6d63/output/container.sif")
-            if not source.exists():
-                raise FileNotFoundError(f"Container {source} not found.")
-        destination = output_path / f"container_{variant}.sif"
-        os.symlink(source.resolve(), destination)
+    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
+    if not source.exists():
+        raise FileNotFoundError(f"Container {source} not found.")
+    destination = output_path / "container.sif"
+    os.symlink(source, destination)
 
 
 def prepare_code(output_path: Path):

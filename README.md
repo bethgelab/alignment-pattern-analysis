@@ -16,27 +16,34 @@ Taskonomy to brain prediction with a focus on multi-image tasks and the dorsal s
 
 ## Installation
 Setup a virtual environment and install the python package provided by this repository.
-We recommend using [uv](https://docs.astral.sh/uv/), which allows using the precise
-dependency version from the [uv.lock](uv.lock) file:
+
+We provide a definition file for a singularity container that can be built using the
+following command:
 
 ```bash
-uv sync
+singularity build --fakeroot singularity/container.sif singularity/container.def
 ```
 
-
-## Dataset Preparation
 Download the bold moments dataset to the `datasets` directory. **TODO: Add more precise instructions**.
-
 
 
 ## Evaluating models
 **TODO: Revise once there's a clean entry point to the benchmark**
 
-Use the [`multitasking.benchmark`](multitasking/benchmark.py) script to evaluate models:
+Use the [`multitasking.benchmark`](multitasking/benchmark.py) script to evaluate a
+single model:
 
 ```bash
 python -m multitasking.benchmark --config configs/benchmark.yaml
 ```
+
+The `tasks/benchmark` directory provides an example setup for running the evaluation for
+all models on a slurm cluster.
+
+```bash
+python tasks/benchmark/launch.py
+```
+
 
 ### Leave-one-out inter-subject comparison
 
