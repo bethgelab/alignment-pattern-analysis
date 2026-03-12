@@ -25,7 +25,6 @@ CONFIG_ROOT = PROJECT_ROOT / "configs"
     "config_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=CONFIG_ROOT / "benchmark.yaml",
-    required=True,
 )
 @click.option(
     "--output-path",

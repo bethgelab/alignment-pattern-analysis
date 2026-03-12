@@ -30,13 +30,13 @@ models or subjects in parallel on a slurm cluster.
 
 ```bash
 # Run all models
-python tasks/benchmark/launch.py
+python tasks/benchmark/launch.py --output-path path/to/output
 
 # Run leave-one-out inter-subject comparison for all subjects
-python tasks/benchmark_inter_subject_consistency/launch.py
+python tasks/benchmark_inter_subject_consistency/launch.py --output-path path/to/output
 
 # Run pairwise inter-subject comparison for all subjects
-python tasks/benchmark_inter_subject_consistency/launch.py --pairwise
+python tasks/benchmark_inter_subject_consistency/launch.py --pairwise --output-path path/to/output
 ```
 
 
