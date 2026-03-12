@@ -2,14 +2,13 @@ data:
   name: bold_moments
 
 dataset:
-  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/stimuli/stimulus_set/
+  path: datasets/bold_moments/ds005165/stimuli/stimulus_set/
   name: bold_moments
   resolution: 256
   frame_rate: 4
 
 fmri:
-  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
-  # path: /mnt/lustre/work/bethge/bkr857/datasets/BOLDMoments/derivatives/versionB/fsLR32k/GLM/
+  path: datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
   sub_id: sub-03
   roi_names: [
     "V1", "V2","V3", "V4", "V3A", "V3B", "V6", "V6A", "V7", "V8",
