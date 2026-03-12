@@ -25,31 +25,19 @@ single model:
 python -m multitasking.benchmark --config configs/benchmark.yaml
 ```
 
-The `tasks/benchmark` directory provides an example setup for running the evaluation for
-all models on a slurm cluster.
+The `tasks/` directory provides example setups for running the evaluation for multiple
+models or subjects in parallel on a slurm cluster.
 
 ```bash
+# Run all models
 python tasks/benchmark/launch.py
+
+# Run leave-one-out inter-subject comparison for all subjects
+python tasks/benchmark_inter_subject_consistency/launch.py
+
+# Run pairwise inter-subject comparison for all subjects
+python tasks/benchmark_inter_subject_consistency/launch.py --pairwise
 ```
-
-
-### Leave-one-out inter-subject comparison
-
-Intersubject jobs are started via a separate `launch.py` (and they have their own `run.sh`), but they can use the same config as the main runs (typically `benchmark.yaml`), where you can choose the metrics to run. 
-
-Example command:
-```bash
-python tasks/bold_moments_benchmark_intersubject_consistency/launch.py \
-  --config configs/benchmark.yaml  \
-  --output-path outputs/for/your/intersubject/results 
-```
-
-### Pairwise inter-subject comparison
-Pass an additional parameter `--pairwise` to compare individual subjects' fMRI data. 
-Parameter `--n-partners-pairwise` determines how many subjects each target subject is compared to. 
-Note: Values above 5 and below 9 will lead to an error, since the current code tries to only create
-unique pairs, and with 6+ pairs per subject that is not possible.
-
 
 
 ## Citation

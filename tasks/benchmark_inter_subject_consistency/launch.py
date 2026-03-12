@@ -102,16 +102,13 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Prepares the container for running the benchmark."""
-    click.echo("Symlinking container...")
-    source = Path(
-        "/mnt/lustre/work/bethge/mtangemann/data/multitasking/jobs/"
-        "6f66a164-d3fd-4e21-bdcf-fda36fe707ee/output/container.sif"
-    )
+    """Prepares the containers for running the benchmark."""
+    click.echo("Symlinking containers...")
+    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
     if not source.exists():
         raise FileNotFoundError(f"Container {source} not found.")
     destination = output_path / "container.sif"
-    os.symlink(source.resolve(), destination)
+    os.symlink(source, destination)
 
 
 def prepare_code(output_path: Path):
