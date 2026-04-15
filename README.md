@@ -13,7 +13,7 @@ following command:
 singularity build --fakeroot singularity/container.sif singularity/container.def
 ```
 
-Download the bold moments dataset to the `datasets` directory.
+Download the BOLDMoments dataset from https://github.com/blahner/BOLDMomentsDataset to the `datasets` directory. Specifically, use the download script for versionB/fsLR32k. Also download the stimuli as detailed at this repository.
 
 
 ## Evaluating models
