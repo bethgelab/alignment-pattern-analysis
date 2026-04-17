@@ -1,0 +1,142 @@
+anshksoni_metrics:
+  CKA:
+    enabled: false
+    normalize: true
+  LinearPredictivity:
+    enabled: false
+    normalize: true
+  PLSreg:
+    enabled: false
+    normalize: true
+  PairwiseMatching:
+    enabled: false
+    normalize: true
+  Procrustes:
+    enabled: false
+    normalize: true
+  RSA:
+    enabled: false
+    normalize: true
+  ReverseLinearPredictivity:
+    enabled: false
+    normalize: true
+  SoftMatching:
+    enabled: false
+    normalize: true
+  SymmetricLinearPredictivity:
+    enabled: false
+    normalize: true
+  VERSA:
+    enabled: false
+    normalize: true
+config_hash: 0ec2fc7d
+config_str: model_vissl_simclr_resnet101_1000epochs_fmridata_a_l_l
+dataset:
+  frame_rate: 4
+  name: bold_moments
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/stimuli/stimulus_set/
+  resolution: 256
+feature_extraction:
+  batch_size: 8
+  layers:
+  - layer1.0
+  - layer1.2
+  - layer2.1
+  - layer3.0
+  - layer3.2
+  - layer3.4
+  - layer3.7
+  - layer3.9
+  - layer3.11
+  - layer3.14
+  - layer3.16
+  - layer3.18
+  - layer3.21
+  - layer4.0
+  - layer4.2
+  model: vissl/simclr_resnet101_1000epochs
+  num_frames: 1
+  num_workers: 8
+feature_reduction:
+  method: srp
+  seed: 1234
+fmri:
+  apply_consistency_threshold: true
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  roi_names:
+  - V1
+  - V2
+  - V3
+  - V4
+  - V3A
+  - V3B
+  - V6
+  - V6A
+  - V7
+  - V8
+  - FFC
+  - PIT
+  - IPS1
+  - MST
+  - MT
+  - FST
+  - LO1
+  - LO2
+  - LO3
+  - V7
+  - IP0
+  - IP1
+  - MIP
+  - VIP
+  - LIPd
+  - LIPv
+  - AIP
+  - 7Pm
+  - 7PL
+  - 7PC
+  - 7Am
+  - 7AL
+  - VVC
+  - VMV2
+  - VMV3
+  - VMV1
+  - PHA2
+  - PHA3
+  - PH
+  sub_id: all
+  voxel_consistency_threshold: 0.2
+linear_predictivity:
+  enabled: true
+output_dir: output/0ec2fc7d
+overwrite: true
+overwrite_cache: true
+procrustes:
+  enabled: false
+  feature_reduction_method: pca
+  feature_reduction_seed: 1234
+  frame_merge_strategy: average
+  n_components: 64
+  normalize_features: false
+  score_function: frobenius
+  use_cv_ankhsoni_prokrustes: false
+rsa:
+  dist_type: pearson
+  enabled: true
+  visualize_rdms: true
+versa:
+  dist_type: pearson
+  enabled: false
+  voxel_encoding:
+    method: ridge
+    one_alpha_per_voxel: false
+    params:
+      alphas:
+      - 100.0
+      - 1000.0
+      - 10000.0
+      - 100000.0
+      - 1000000.0
+      - 10000000.0
+      cv: 5
+      fit_intercept: true
+      scoring: pearson
