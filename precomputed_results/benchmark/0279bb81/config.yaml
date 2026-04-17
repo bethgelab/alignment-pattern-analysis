@@ -1,0 +1,135 @@
+anshksoni_metrics:
+  CKA:
+    enabled: false
+    normalize: true
+  LinearPredictivity:
+    enabled: false
+    normalize: true
+  PLSreg:
+    enabled: false
+    normalize: true
+  PairwiseMatching:
+    enabled: false
+    normalize: true
+  Procrustes:
+    enabled: false
+    normalize: true
+  RSA:
+    enabled: false
+    normalize: true
+  ReverseLinearPredictivity:
+    enabled: false
+    normalize: true
+  SoftMatching:
+    enabled: false
+    normalize: true
+  SymmetricLinearPredictivity:
+    enabled: false
+    normalize: true
+  VERSA:
+    enabled: false
+    normalize: true
+config_hash: 0279bb81
+config_str: model_mmaction2_swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb_fmridata_a_l_l
+dataset:
+  frame_rate: 4
+  name: bold_moments
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/stimuli/stimulus_set/
+  resolution: 256
+feature_extraction:
+  batch_size: 1
+  layers:
+  - backbone.layers.0
+  - backbone.layers.1
+  - backbone.layers.2.blocks.1
+  - backbone.layers.2.blocks.2
+  - backbone.layers.2.blocks.3
+  - backbone.layers.2.blocks.4
+  - backbone.layers.2.blocks.5
+  - backbone.layers.3
+  model: mmaction2/swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb
+  num_frames: 1
+  num_workers: 1
+feature_reduction:
+  method: srp
+  seed: 1234
+fmri:
+  apply_consistency_threshold: true
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  roi_names:
+  - V1
+  - V2
+  - V3
+  - V4
+  - V3A
+  - V3B
+  - V6
+  - V6A
+  - V7
+  - V8
+  - FFC
+  - PIT
+  - IPS1
+  - MST
+  - MT
+  - FST
+  - LO1
+  - LO2
+  - LO3
+  - V7
+  - IP0
+  - IP1
+  - MIP
+  - VIP
+  - LIPd
+  - LIPv
+  - AIP
+  - 7Pm
+  - 7PL
+  - 7PC
+  - 7Am
+  - 7AL
+  - VVC
+  - VMV2
+  - VMV3
+  - VMV1
+  - PHA2
+  - PHA3
+  - PH
+  sub_id: all
+  voxel_consistency_threshold: 0.2
+linear_predictivity:
+  enabled: true
+output_dir: output/0279bb81
+overwrite: true
+overwrite_cache: true
+procrustes:
+  enabled: false
+  feature_reduction_method: pca
+  feature_reduction_seed: 1234
+  frame_merge_strategy: average
+  n_components: 64
+  normalize_features: false
+  score_function: frobenius
+  use_cv_ankhsoni_prokrustes: false
+rsa:
+  dist_type: pearson
+  enabled: true
+  visualize_rdms: true
+versa:
+  dist_type: pearson
+  enabled: false
+  voxel_encoding:
+    method: ridge
+    one_alpha_per_voxel: false
+    params:
+      alphas:
+      - 100.0
+      - 1000.0
+      - 10000.0
+      - 100000.0
+      - 1000000.0
+      - 10000000.0
+      cv: 5
+      fit_intercept: true
+      scoring: pearson
