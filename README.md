@@ -16,6 +16,14 @@ singularity build --fakeroot singularity/container.sif singularity/container.def
 Download the BOLDMoments dataset from https://github.com/blahner/BOLDMomentsDataset to the `datasets` directory. Specifically, use the download script for versionB/fsLR32k. Also download the stimuli as detailed at this repository.
 
 
+## Reproducing alignment pattern analysis
+
+We provide precomputed results from running the benchmarking pipeline. Alignment pattern analysis can be performed based on these results by executing 
+```bash
+./run_aggregate_results.sh
+```
+Run figure shell scripts (```run_figure_{x}.sh```) to recreate the paper figures.
+
 ## Evaluating models
 
 Use the [`multitasking.benchmark`](multitasking/benchmark.py) script to evaluate a
