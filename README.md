@@ -5,9 +5,30 @@ This repository provides the code for the ICLR 2026 paper [Only Brains Align wit
 
 ## Preliminaries
 Setup a virtual environment and install the python package provided by this repository.
+Additionally to the dependencies listed in [pyproject.toml](pyproject.toml), you will
+need to install the `mmcv` and `mmaction2` for your GPU type, for example:
+
+```bash
+# Building MMCV may take some time. Be patient.
+# This has to be done *after* torch and torchvision are installed. Otherwise, this
+# will install fine but complain about missing `mmcv._ext` later.
+MMCV_WITH_OPS=1 FORCE_CUDA="1" TORCH_CUDA_ARCH_LIST="Volta;Turing;Ampere" \
+    pip install git+https://github.com/open-mmlab/mmcv.git@v2.1.0
+
+# We additionally need the base config files, so we clone the repository explicitely
+# and install the package from there.
+# Some source files related to DRN are not copied to site-packages which results in
+# an error. To fix this, we use an editable install.
+# See https://github.com/open-mmlab/mmaction2/issues/2714
+git clone https://github.com/open-mmlab/mmaction2.git
+cd mmaction2
+git checkout v1.2.0
+pip install -e .
+```
 
 We provide a definition file for a singularity container that can be built using the
-following command:
+command below. The [container.def](singularity/container.def) might be useful even when
+not using singularity, as it defines the exact steps used to set up the environment.
 
 ```bash
 singularity build --fakeroot singularity/container.sif singularity/container.def

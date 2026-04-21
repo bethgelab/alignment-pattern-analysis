@@ -17,6 +17,7 @@ version = "1.0.0"
 requires-python = ">=3.10"
 dependencies = [
   "click==8.1.8",
+  "clip @ git+https://github.com/openai/CLIP.git",
   "coloredlogs==15.0.1",
   "dacite==1.9.2",
   "easydict==1.13",
@@ -25,32 +26,36 @@ dependencies = [
   "hcp_utils==0.1.0",
   "imageio[pyav,ffmpeg]==2.37.0",
   "ipykernel==6.29.5",
+  "mmengine @ git+https://github.com/open-mmlab/mmengine.git@v0.10.7",
+  "net2brain @ git+https://github.com/cvai-roig-lab/Net2Brain.git",
+  "setuptools",
   "nibabel==5.3.2",
   "nilearn==0.11.1",
   "numba==0.61.2",
-  "odfpy==1.4.1",
-  "POT==0.9.5",
   "pydantic==2.11.4",
   "python-benedict==0.34.1",
   "questionary==2.1.0",
   "seaborn==0.12.2",
   "timm==0.4.12",
-  "tqdm==4.67.3",
   "torch==2.6.0",
   "torchextractor==0.3.0",
   "torchvision==0.21.0",
+  "transformers==4.40.2",
+  "vggt @ git+https://github.com/facebookresearch/vggt.git",
   "visualpriors==0.3.5",
+  # mmcv and mmaction2 require a CUDA-aware build and an editable install from
+  # a cloned repo; see README.md for installation instructions.
 ]
 
 
 [dependency-groups]
 dev = [
-  "mypy~=1.17",
+  "mypy==1.17.1",
   "pandas-stubs==2.3.0.250703",
-  "pre-commit~=4.2",
-  "pytest~=8.4",
-  "pytest-cov~=6.2",
-  "ruff~=0.12.7",
+  "pre-commit==4.3.0",
+  "pytest==8.4.1",
+  "pytest-cov==6.2.1",
+  "ruff==0.12.7",
   "tqdm-stubs==0.2.1",
   "types-pycocotools==2.0.0.20250111",
   "types-pyyaml==6.0.12.20250516",
@@ -66,11 +71,3 @@ exclude = ["_extern", "multitasking/plot_creation/**", "multitasking/analyses/al
 
 [tool.setuptools]
 packages = ["multitasking"]
-
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-
-
-[tool.setuptools.dynamic.optional-dependencies]
-dev = {file = ["requirements-dev.txt"]}
