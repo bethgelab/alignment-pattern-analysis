@@ -63,6 +63,7 @@ From: nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
 
 
     # --- Python dependencies ---
+    # Setuptools is required by net2brain -> statsmodels
     pip install --no-cache-dir \
         click==8.1.8 \
         "clip @ git+https://github.com/openai/CLIP.git" \
@@ -75,7 +76,6 @@ From: nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
         imageio[pyav,ffmpeg]==2.37.0 \
         ipykernel==6.29.5 \
         "mmengine @ git+https://github.com/open-mmlab/mmengine.git@v0.10.7" \
-        "net2brain @ git+https://github.com/cvai-roig-lab/Net2Brain.git" \
         nibabel==5.3.2 \
         nilearn==0.11.1 \
         numba==0.61.2 \
@@ -85,13 +85,19 @@ From: nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
         questionary==2.1.0 \
         ruff==0.11.8 \
         seaborn==0.12.2 \
+        setuptools \
         timm==0.4.12 \
         torch==2.6.0 \
         torchextractor==0.3.0 \
         torchvision==0.21.0 \
-        transformers==4.30.2 \
+        transformers==4.40.2 \
         "vggt @ git+https://github.com/facebookresearch/vggt.git" \
         visualpriors==0.3.5
+
+    # net2brain's dependency statsmodels uses setup.py without declaring setuptools
+    # as a build requirement, so pip's isolated build env lacks pkg_resources.
+    pip install --no-cache-dir --no-build-isolation \
+        "net2brain @ git+https://github.com/cvai-roig-lab/Net2Brain.git"
 
     pip install --no-cache-dir \
         mypy==1.17.1 \
