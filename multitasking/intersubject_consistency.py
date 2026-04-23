@@ -4,25 +4,23 @@ Similar to benchmark.py, but for intersubject consistency.
 
 Differences in config (compared to benchmark.py):
 ------------------------------------------------
-(The config isusually created in launch.py; check out
-tasks/bold_moments_benchmark_intersubject_consistency/launch.py)
-    fmri:
-        intersubject (new!):
-            mode: "pairwise" | "leave-one-out-mean"
-                    Not used except for consistency checks (that
-                     the run is doing what it's supposed to do).
-            target_sub_ids: list[str]:
-                    The target subjects to compute the intersubject
-                    consistency for. We loop over those.
-            source_sub_ids: list[list[str]] | None:
-                    If None, we compute the leave-one-out-mean of
-                    all subjects except the target subject.
-                    Else expecting one list of source subjects per
-                    target; we average over those.
-                    (One source -> no averaging.)
-    feature_extraction:
-        model: specifies the source subject(s) instead of a model.
-        layers / other feature_extraction settings: ignored
+fmri:
+    intersubject (new!):
+        mode: "pairwise" | "leave-one-out-mean"
+                Not used except for consistency checks (that
+                    the run is doing what it's supposed to do).
+        target_sub_ids: list[str]:
+                The target subjects to compute the intersubject
+                consistency for. We loop over those.
+        source_sub_ids: list[list[str]] | None:
+                If None, we compute the leave-one-out-mean of
+                all subjects except the target subject.
+                Else expecting one list of source subjects per
+                target; we average over those.
+                (One source -> no averaging.)
+feature_extraction:
+    model: specifies the source subject(s) instead of a model.
+    layers / other feature_extraction settings: ignored
 
 """
 import logging

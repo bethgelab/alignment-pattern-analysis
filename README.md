@@ -54,18 +54,18 @@ single model:
 python -m multitasking.benchmark --config configs/benchmark.yaml
 ```
 
-The `tasks/` directory provides example setups for running the evaluation for multiple
+The `scripts/` directory provides example setups for running the evaluation for multiple
 models or subjects in parallel on a slurm cluster.
 
 ```bash
 # Run all models
-python tasks/benchmark/launch.py --output-path path/to/output
+python scripts/run_models.py --output-path path/to/output
 
 # Run leave-one-out inter-subject comparison for all subjects
-python tasks/benchmark_inter_subject_consistency/launch.py --output-path path/to/output
+python scripts/run_inter_subject_consistency.py --output-path path/to/output
 
 # Run pairwise inter-subject comparison for all subjects
-python tasks/benchmark_inter_subject_consistency/launch.py --pairwise --output-path path/to/output
+python scripts/run_inter_subject_consistency.py --pairwise --output-path path/to/output
 ```
 
 

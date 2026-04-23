@@ -194,7 +194,6 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
             model_config["fmri"]["intersubject"]["target_sub_ids"] = [target_subject_]
             model_config["fmri"]["intersubject"]["source_sub_ids"] = [[source_subject_]]
 
-
             run_name = f"{source_subject_}-vs-{target_subject_}"
             model_config_path = output_path / f"{run_name}.yaml"
             model_config.to_yaml(filepath=model_config_path)
@@ -203,9 +202,7 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
 def prepare_slurm_script(output_path: Path, base_config: benedict):
     """Prepares the SLURM script for running the benchmark."""
     click.echo("Preparing SLURM script...")
-    source =( PROJECT_ROOT / "tasks" /
-                "bold_moments_benchmark_intersubject_consistency" /
-                "run.sh")
+    source = PROJECT_ROOT / "scripts" / "run_inter_subject_consistency_slurm.sh"
     destination = output_path / "run.sh"
     shutil.copy(source, destination)
 

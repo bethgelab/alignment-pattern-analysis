@@ -121,7 +121,7 @@ def prepare_configs(output_path: Path, base_config: benedict):
 def prepare_slurm_script(output_path: Path, base_config: benedict):
     """Prepares the SLURM script for running the benchmark."""
     click.echo("Preparing SLURM script...")
-    source = PROJECT_ROOT / "tasks" / "benchmark" / "run.sh"
+    source = PROJECT_ROOT / "scripts" / "run_models_slurm.sh"
     destination = output_path / "run.sh"
     shutil.copy(source, destination)
 
