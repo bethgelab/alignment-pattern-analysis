@@ -81,13 +81,28 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Prepares the containers for running the benchmark."""
+    """Prepares the containers for running the benchmark.
+
+    submit_jobs selects a container per model, so both variants are linked
+    under the names it passes as $CONTAINER.
+
+    Args:
+        output_path: The job directory to link the containers into.
+
+    Raises:
+        FileNotFoundError: If a container variant is missing, naming where it
+            is expected.
+    """
     click.echo("Symlinking containers...")
-    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
-    if not source.exists():
-        raise FileNotFoundError(f"Container {source} not found.")
-    destination = output_path / "container.sif"
-    os.symlink(source, destination)
+    for variant in ("mmflow", "mmaction2"):
+        source = PROJECT_ROOT / "singularity" / f"multitasking_{variant}.sif"
+        if not source.exists():
+            raise FileNotFoundError(
+                f"Container {source} not found. Build it from "
+                "singularity/container.def, or symlink an existing image to "
+                "that path."
+            )
+        os.symlink(source.resolve(), output_path / f"container_{variant}.sif")
 
 
 def prepare_code(output_path: Path):
