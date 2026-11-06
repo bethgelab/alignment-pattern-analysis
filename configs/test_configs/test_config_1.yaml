@@ -1,0 +1,15 @@
+# Minimal config for tests/test_data_loading.py.
+#
+# Paired with test_config_2.yaml: the two share some ROIs but not all, so the
+# test can assert that a shared ROI yields identical data regardless of which
+# other ROIs were requested alongside it.
+#
+# Note: load_fmri.load_dataset dispatches on the top-level `data.name` key,
+# which is distinct from the `dataset.name` key the benchmark pipeline uses.
+data:
+  name: bold_moments
+
+fmri:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  sub_id: sub-01
+  roi_names: ["V1", "V2", "V3", "V4"]

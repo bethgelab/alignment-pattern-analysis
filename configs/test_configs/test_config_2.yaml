@@ -1,0 +1,9 @@
+# Minimal config for tests/test_data_loading.py. See test_config_1.yaml.
+# Overlaps test_config_1 in V2/V3 but differs in the surrounding ROIs.
+data:
+  name: bold_moments
+
+fmri:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  sub_id: sub-01
+  roi_names: ["V2", "V3", "MT", "LO1"]
