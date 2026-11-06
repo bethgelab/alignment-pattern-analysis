@@ -245,14 +245,48 @@ class NSD(FmriStimulusDataset):
             yield torch.stack(batch), ids
 
     def _cache_path(self, subject_id: str) -> Path:
-        """Returns a subject's per-ROI beta cache path."""
-        return cache_path(
+        """Returns a subject's per-ROI beta cache path.
+
+        Prefers a cache built for exactly this ROI set, and otherwise accepts
+        one built for a superset, so that a cache prepared once with the full
+        ROI list serves every subset without a ~30 minute rebuild.
+
+        Args:
+            subject_id: The subject to look up.
+
+        Returns:
+            The path of a usable cache, or of the exact-match cache when none
+            exists yet, so that the caller's error message names it.
+        """
+        exact = cache_path(
             self.roi_beta_cache,
             subject_id,
             list(self.roi_masks.roi_names),
             self.surface_space,
             self.subsample_stride,
         )
+        if exact.exists():
+            return exact
+
+        needed = set(self.roi_masks.roi_names)
+        search_root = (
+            self.roi_beta_cache
+            / "nsd_roi_betas"
+            / self.surface_space
+            / f"stride{self.subsample_stride}"
+        )
+        for candidate in sorted(search_root.glob(f"*/{subject_id}.npz")):
+            with np.load(candidate, allow_pickle=False) as cached:
+                cached_rois = {str(name) for name in cached["roi_names"]}
+            if needed <= cached_rois:
+                LOGGER.info(
+                    "Using ROI beta cache %s, which covers the %d requested ROIs.",
+                    candidate,
+                    len(needed),
+                )
+                return candidate
+
+        return exact
 
     def _load_subject_betas(self, subject_id: str) -> NDArray[np.float32]:
         """Loads a subject's ROI betas for this split, in sample_ids order.
@@ -285,12 +319,45 @@ class NSD(FmriStimulusDataset):
             trial_counts = cached["trial_counts"]
             stimulus_ids = cached["stimulus_ids"]
             cached_rois = [str(name) for name in cached["roi_names"]]
+            cached_counts = cached["roi_vertex_counts"]
 
-        if cached_rois != list(self.roi_masks.roi_names):
+        missing_rois = [
+            roi for roi in self.roi_masks.roi_names if roi not in cached_rois
+        ]
+        if missing_rois:
             raise ValueError(
-                f"Cached betas at {path} were built for ROIs {cached_rois}, not "
-                f"{list(self.roi_masks.roi_names)}."
+                f"Cached betas at {path} were built for ROIs {cached_rois} and "
+                f"do not cover {missing_rois}."
             )
+
+        # The cache may hold more ROIs than this run needs; take the requested
+        # ones, in this dataset's ROI order, so that the columns line up with
+        # roi_masks.rois_to_indices.
+        cached_bounds = {}
+        start = 0
+        for roi_name, count in zip(cached_rois, cached_counts, strict=True):
+            cached_bounds[roi_name] = (start, start + int(count))
+            start += int(count)
+
+        for roi_name in self.roi_masks.roi_names:
+            cached_width = (
+                cached_bounds[roi_name][1] - cached_bounds[roi_name][0]
+            )
+            expected_width = self.roi_masks.voxels_per_roi[roi_name]
+            if cached_width != expected_width:
+                raise ValueError(
+                    f"Cached betas at {path} have {cached_width} vertices for "
+                    f"{roi_name}, but the atlas gives {expected_width}. The "
+                    "cache was built with a different atlas or stride."
+                )
+
+        betas = np.concatenate(
+            [
+                betas[:, slice(*cached_bounds[roi_name])]
+                for roi_name in self.roi_masks.roi_names
+            ],
+            axis=1,
+        )
 
         expected_ids = np.arange(1, len(stimulus_ids) + 1)
         if not np.array_equal(stimulus_ids, expected_ids):
@@ -319,11 +386,55 @@ class NSD(FmriStimulusDataset):
             )
 
         selected = betas[rows]
-        if np.isnan(selected).any():
+        return self._impute_missing_vertices(selected, subject_id)
+
+    def _impute_missing_vertices(
+        self, betas: NDArray[np.float32], subject_id: str
+    ) -> NDArray[np.float32]:
+        """Fills vertices that have no valid repetition for a given stimulus.
+
+        A handful of (stimulus, vertex) cells have every repetition missing -
+        for the ROIs in the default config, 0.013% of subj06's values and nine
+        vertices of subj08's, with every other subject clean. The betas are
+        z-scored per session, so these are filled with zero, the vertex's
+        expected value, which is also what the reference implementation's
+        ``impute_nans`` does once trial averaging has been applied.
+
+        Args:
+            betas: Selected betas of shape ``(n_samples, n_vertices)``.
+            subject_id: The subject, for logging.
+
+        Returns:
+            The array with missing cells filled.
+
+        Raises:
+            ValueError: If a vertex has no valid value for any stimulus, which
+                would leave a constant feature rather than a gap.
+        """
+        missing = np.isnan(betas)
+        if not missing.any():
+            return betas
+
+        empty_vertices = np.flatnonzero(missing.all(axis=0))
+        if empty_vertices.size:
             raise ValueError(
-                f"{subject_id}: NaNs remain in the selected betas from {path}."
+                f"{subject_id}: {empty_vertices.size} vertices have no valid "
+                "value for any stimulus in this split; filling them would "
+                "create constant features. Affected vertex indices (first "
+                f"ten): {empty_vertices[:10].tolist()}"
             )
-        return selected
+
+        LOGGER.warning(
+            "%s: filling %d missing values (%.4f%% of cells, %d vertices) with "
+            "zero, the per-session z-scored expectation.",
+            subject_id,
+            int(missing.sum()),
+            100.0 * missing.sum() / missing.size,
+            int(np.unique(np.flatnonzero(missing.any(axis=0))).size),
+        )
+        filled = betas.copy()
+        filled[missing] = 0.0
+        return filled
 
     def _reformat_data_roi_wise(
         self, betas: NDArray[np.float32]

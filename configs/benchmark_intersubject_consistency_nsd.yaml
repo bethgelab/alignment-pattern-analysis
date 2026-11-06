@@ -1,0 +1,62 @@
+# Inter-subject consistency (brain-brain baseline) for the Natural Scenes Dataset.
+#
+# fmri.intersubject is written per job by
+# tasks/benchmark_inter_subject_consistency/launch.py, which sets sub_id to
+# "all" for leave-one-out-mean runs and to a subject pair for pairwise runs.
+#
+# fmri.stimulus_subject_ids stays at all eight subjects regardless, so every
+# run - benchmark, leave-one-out and pairwise - is computed on the same 766
+# stimuli. Letting it follow sub_id would give a pairwise run between two
+# 40-session subjects all 1000 stimuli, and the brain-brain reference would
+# then rest on different stimuli than the model-brain alignment it anchors.
+
+data:
+  name: nsd
+
+dataset:
+  name: nsd
+  path: /mnt/lustre/work/bethge/bkr578/data/NSD/stimuli
+  resolution: 256
+  surface_space: fsaverage
+  train_fraction: 0.8
+
+fmri:
+  path: /mnt/lustre/work/bethge/bkr857/datasets/NSD
+  atlas_dir: /mnt/lustre/work/bethge/bkr857/datasets/NSD/atlas
+  roi_beta_cache: /mnt/lustre/work/bethge/bkr578/data/NSD/cache
+  sub_id: "all"
+  stimulus_subject_ids: ["subj01", "subj02", "subj03", "subj04", "subj05", "subj06", "subj07", "subj08"]
+  min_n_trials: 2
+  subsample_stride: 6
+  roi_names: [
+    "V1", "V2", "V3", "V4", "V3A", "V3B", "V6", "V6A", "V7", "V8",
+    "FFC", "PIT", "IPS1", "MST", "MT",
+    "FST", "LO1", "LO2", "LO3"
+  ]
+  voxel_consistency_threshold: .2
+  apply_consistency_threshold: True
+
+feature_extraction:
+  model: all-other-subjects
+  batch_size: 8
+  num_workers: 8
+  num_frames: 1
+
+feature_reduction:
+  method: srp
+  n_components: 512
+  seed: 1234
+
+rsa:
+  enabled: True
+  dist_type: pearson
+
+# Not part of this release; see _check_unsupported_metrics.
+versa:
+  enabled: False
+
+procrustes:
+  enabled: False
+
+linear_predictivity:
+  enabled: True
