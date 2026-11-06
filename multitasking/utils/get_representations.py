@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from multitasking.datasets import BoldMoments
+from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.feature_extraction import FeatureBuffer, extract_model_representations
 from multitasking.feature_reduction import reduce_features
 from multitasking.logging_utils import memory_usage
@@ -17,7 +17,7 @@ SAMPLE_IDS_KEY = "__sample_ids__"
 
 def compute_model_representation(
     config: dict,
-    dataset: BoldMoments,
+    dataset: FmriStimulusDataset,
     cache_path: Path,
     reuse: bool = False,
     split: str | None = None,
