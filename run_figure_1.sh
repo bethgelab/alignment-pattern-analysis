@@ -6,12 +6,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
+DATASET="${DATASET:-bold_moments}"
+
 # Pull ROIs from multitasking.CONSTANTS
 ROIS=$(python3 -c "
 import sys
 sys.path.insert(0, '.')
-from multitasking.CONSTANTS import ROIS
-print(' '.join(ROIS))
+from multitasking.CONSTANTS import get_rois
+print(' '.join(get_rois('$DATASET')))
 ")
 
 # Metrics: rsa, linear_predictivity
@@ -30,6 +33,7 @@ for metric in $METRICS; do
         for roi in $ROIS; do
             echo "Running: metric=$metric main_outcome=$main_outcome roi=$roi"
             python -m multitasking.plotting_scripts.figure_1 \
+                --dataset "$DATASET" \
                 --metric "$metric" \
                 --main-outcome "$main_outcome" \
                 --roi "$roi"

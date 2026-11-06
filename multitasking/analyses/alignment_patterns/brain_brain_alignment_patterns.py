@@ -147,21 +147,27 @@ class PairwiseBrainBrainAlignmentPatterns(AlignmentPattern):
 
     def get_brain_brain_alignment_pattern_similarity(
         self,
-        rois: list[str] = ROIS,
-        subjects: list[str] = SUBJECTS,
+        rois: list[str] | None = None,
+        subjects: list[str] | None = None,
         similarity_metric: str = "pearson",
     ) -> pd.DataFrame:
         """Compute similarity between alignment patterns and reference patterns.
 
         Args:
-            rois: List of ROI names to compute similarity for.
-            subjects: List of subject names to compute similarity for.
+            rois: ROI names to compute similarity for. Defaults to the BOLD
+                Moments ROI list, for backwards compatibility; dataset-aware
+                callers should pass this explicitly.
+            subjects: Subject names to compute similarity for. Defaults to the
+                BOLD Moments subject list.
             similarity_metric: Similarity metric. Only ``"pearson"`` is
                 supported.
 
         Returns:
             DataFrame with columns: model, roi, subject, similarity.
         """
+        rois = ROIS if rois is None else rois
+        subjects = SUBJECTS if subjects is None else subjects
+
         similarities_df = pd.DataFrame(columns=["roi", "subject", "similarity"])
         rows = []
         self.similarity_metric: str = similarity_metric

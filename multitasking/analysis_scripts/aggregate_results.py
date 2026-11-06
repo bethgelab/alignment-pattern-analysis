@@ -19,13 +19,13 @@ from multitasking.analyses.alignment_patterns.brain_brain_alignment_patterns imp
 from multitasking.analyses.alignment_patterns.model_brain_alignment_patterns import (
     ModelBrainAlignmentPatterns,
 )
-from multitasking.analyses.equivalence_analysis import run_equivalence_analysis
-from multitasking.CONSTANTS import ROIS as rois
 from multitasking.analyses.dataframe_utils import (
     get_order,
     load_bm_results,
     select_top_layer,
 )
+from multitasking.analyses.equivalence_analysis import run_equivalence_analysis
+from multitasking.CONSTANTS import get_rois, get_subjects
 from multitasking.utils.scoresheet_loading import load_scoresheets_from_parent_dir
 
 # Configure logging
@@ -87,12 +87,22 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
     help='Main outcome to use for selecting top layer (default: score)',
     type=click.Choice(['score', 'score_norm_upper', 'score_norm_lower']),
 )
-def main(output_supdir: Path,
+@click.option(
+    "--dataset",
+    type=click.Choice(["bold_moments", "nsd"]),
+    default="bold_moments",
+    show_default=True,
+    help="Which dataset's canonical ROI and subject lists to use.",
+)
+def main(dataset: str,
+         output_supdir: Path,
          intersubject_dir: Path,
          pairwise_subject_dir: Path,
          aps_similarity_metric: str,
          main_outcome: str = "score"):
     """Main function to aggregate and analyze results."""
+    rois = get_rois(dataset)
+    subjects = get_subjects(dataset)
     SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 
     # Load and organize results
