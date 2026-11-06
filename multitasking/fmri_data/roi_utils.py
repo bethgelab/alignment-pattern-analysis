@@ -1,5 +1,5 @@
 import logging
-from pathlib import Path
+import os
 from typing import ClassVar
 
 import hcp_utils as hcp
@@ -177,7 +177,7 @@ def build_roi_masks(
     roi_groups: dict[str, list[str]] | None = None,
     *,
     surface_space: str = "fsLR32k",
-    atlas_dir: str | Path | None = None,
+    atlas_dir: str | os.PathLike | None = None,
     subsample_stride: int = 1,
 ) -> RoiMasks:
     """Builds ROI masks for the requested surface space.

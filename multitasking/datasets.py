@@ -488,9 +488,23 @@ class BoldMoments(FmriStimulusDataset):
 
 def build_dataset(
     config: dict[str, Any], split: Literal["train", "test"]
-) -> BoldMoments:
-    """Builds a dataset from a config."""
-    if config["dataset"].get("name") == "bold_moments":
+) -> FmriStimulusDataset:
+    """Builds a dataset from a config.
+
+    Args:
+        config: The full configuration dictionary.
+        split: Which split to build.
+
+    Returns:
+        The dataset for that split.
+
+    Raises:
+        NotImplementedError: For the retired fMRI-Objaverse dataset.
+        ValueError: For an unknown dataset name.
+    """
+    dataset_name = config["dataset"].get("name")
+
+    if dataset_name == "bold_moments":
         subject_ids = config["fmri"].get("sub_id", "all")
         if type(subject_ids) is str and subject_ids != "all":
             subject_ids = [subject_ids]
@@ -504,8 +518,39 @@ def build_dataset(
             frame_rate=config["dataset"].get("frame_rate", None),
         )
 
-    elif config.get("name") == "fmri_objaverse":
+    elif dataset_name == "nsd":
+        # Imported lazily so the BOLD Moments path needs neither PIL nor the
+        # NSD metadata.
+        from multitasking.datasets_nsd import NSD
+
+        if "frame_rate" in config["dataset"]:
+            raise ValueError(
+                "dataset.frame_rate is meaningless for NSD, which has still "
+                "images. Remove it from the config."
+            )
+
+        subject_ids = config["fmri"].get("sub_id", "all")
+        if type(subject_ids) is str and subject_ids != "all":
+            subject_ids = [subject_ids]
+        return NSD(
+            stimulus_path=config["dataset"]["path"],
+            fmri_path=config["fmri"]["path"],
+            rois=config["fmri"]["roi_names"],
+            split=split,
+            subject_ids=subject_ids,
+            stimulus_subject_ids=config["fmri"].get("stimulus_subject_ids"),
+            min_n_trials=config["fmri"].get("min_n_trials", 2),
+            train_fraction=config["dataset"].get("train_fraction", 0.8),
+            surface_space=config["dataset"].get("surface_space", "fsaverage"),
+            atlas_dir=config["fmri"].get("atlas_dir"),
+            subsample_stride=config["fmri"].get("subsample_stride", 6),
+            roi_beta_cache=config["fmri"].get("roi_beta_cache"),
+            resolution=config["dataset"].get("resolution", None),
+            roi_groups=config["fmri"].get("roi_groups"),
+        )
+
+    elif dataset_name == "fmri_objaverse":
         raise NotImplementedError("fMRI-Objaverse is no longer supported.")
 
     else:
-        raise ValueError(f"Invalid dataset name: {config.get('name')}")
+        raise ValueError(f"Invalid dataset name: {dataset_name}")
