@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --partition=your-partition
+#SBATCH --partition=2080-preemptable-galvani,bethge,2080-galvani
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
@@ -20,10 +20,13 @@ if [ -z "$CONTAINER" ]; then
     exit 1
 fi
 
+mkdir -p "$SCRATCH/home"
+
 srun singularity exec --nv \
     --home "$SCRATCH/home" \
     --pwd "$(pwd)" \
     --bind $SCRATCH \
+    --bind /mnt/lustre/work/bethge/ \
     --env PYTHONPATH=multitasking \
     $CONTAINER \
         python -m multitasking.benchmark \
