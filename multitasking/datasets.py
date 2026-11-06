@@ -12,7 +12,11 @@ import torch
 from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
+from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.fmri_data.roi_utils import RoiMasks
+from multitasking.fmri_data.voxel_consistency import (
+    get_roi_wise_voxel_consistency,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -105,8 +109,8 @@ class FMRIObjaverse(Dataset):
         return torch.from_numpy(video).movedim(-1, 0)
 
 
-class BoldMoments:
-    """Loads videos from the fMRI-Objaverse dataset."""
+class BoldMoments(FmriStimulusDataset):
+    """Loads videos and fMRI responses from the BOLD Moments dataset."""
 
     def __init__(
         self,
@@ -283,6 +287,19 @@ class BoldMoments:
                 self._load_fmri_per_subject(sub, return_sample_ids=False)
             )
         return fmri_data
+
+    def load_voxel_consistency(self, subject_id: str) -> dict[str, np.ndarray]:
+        """Loads a subject's per-ROI noise ceiling SNR.
+
+        Args:
+            subject_id: The subject whose reliability values to load.
+
+        Returns:
+            A dictionary mapping ROI names to per-voxel noise ceiling SNR.
+        """
+        return get_roi_wise_voxel_consistency(
+            {"path": str(self.fmri_path)}, self.roi_masks, subject_id
+        )
 
     def load_videos(self, batch_size=1) ->  \
         Iterator[tuple[torch.Tensor, list[str]]]:
