@@ -18,7 +18,7 @@ import pandas as pd
 import seaborn as sns
 
 from multitasking.analyses.dataframe_utils import get_order
-from multitasking.CONSTANTS import ROIS as rois
+from multitasking.CONSTANTS import get_rois
 from multitasking.plot_creation.plot_utils import save_this, set_ticks_0_1
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,15 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Whether to include taskonomy models (default: False)",
 )
-def main(metric, main_outcome, split, plot_path, taskonomy):
+@click.option(
+    "--dataset",
+    type=click.Choice(["bold_moments", "nsd"]),
+    default="bold_moments",
+    show_default=True,
+    help="Which dataset's canonical ROI and subject lists to use.",
+)
+def main(dataset: str, metric, main_outcome, split, plot_path, taskonomy):
+    rois = get_rois(dataset)
     scratch = Path(os.environ.get("SCRATCH", "/scratch"))
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent.parent

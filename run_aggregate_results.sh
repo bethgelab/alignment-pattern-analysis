@@ -1,5 +1,8 @@
 
 DIR=$(dirname "$(realpath "$0")")
+
+# Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
+DATASET="${DATASET:-bold_moments}"
 OUTPUT_SUPDIR="$DIR/precomputed_results/benchmark/" # should contain subdirectories of individual model runs
 INTERSUBJECT_DIR="$DIR/precomputed_results/intersubject" # should contain the (1) subdirectory that holds the intersubject results
 PAIRWISE_SUBJECT_DIR="$DIR/precomputed_results/pairwise" # should contain the (many) subdirectories that holds the pairwise subject results
@@ -9,5 +12,5 @@ MAIN_OUTCOME="score" # score, score_norm_upper, score_norm_lower
 MAIN_OUTCOMES="score score_norm_lower" # score, score_norm_upper, score_norm_lower
 
 for main_outcome in $MAIN_OUTCOMES; do
-    python -m multitasking.analysis_scripts.aggregate_results --output-supdir $OUTPUT_SUPDIR --intersubject-dir $INTERSUBJECT_DIR --pairwise-subject-dir $PAIRWISE_SUBJECT_DIR --aps-similarity-metric $APSIMILARITY_METRIC --main-outcome "$main_outcome"
+    python -m multitasking.analysis_scripts.aggregate_results --dataset "$DATASET" --output-supdir $OUTPUT_SUPDIR --intersubject-dir $INTERSUBJECT_DIR --pairwise-subject-dir $PAIRWISE_SUBJECT_DIR --aps-similarity-metric $APSIMILARITY_METRIC --main-outcome "$main_outcome"
 done
