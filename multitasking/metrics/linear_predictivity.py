@@ -129,7 +129,9 @@ class LinearPredictivity(Metric):
 
         return np.sum(scores) / len(x), {
             "models": models,
-            "alphas": [m.alpha_.item() for m in models],
+            # float() rather than .item(): scikit-learn returns alpha_ as a
+            # numpy scalar in older versions and a plain float in newer ones.
+            "alphas": [float(m.alpha_) for m in models],
             "train_scores": train_scores,
             "ridgecv_val_mse": ridgecv_val_mse,
             "train_mse": train_mse,

@@ -99,6 +99,7 @@ def fake_nsd(tmp_path, monkeypatch):
             trial_counts=subject_counts,
             stimulus_ids=np.arange(1, NSD_SHARED1000_SIZE + 1, dtype=np.uint16),
             roi_names=np.asarray(ROIS),
+            roi_vertex_counts=np.asarray([VERTS[roi] for roi in ROIS]),
         )
 
     # NCSNR, in full-surface vertex space.
@@ -130,13 +131,13 @@ def fake_nsd(tmp_path, monkeypatch):
     }
 
 
-def _build(fake_nsd, split="test", **kwargs):
+def _build(fake_nsd, split="test", rois_override=None, **kwargs):
     from multitasking.datasets_nsd import NSD
 
     return NSD(
         stimulus_path=fake_nsd["stimulus_path"],
         fmri_path=fake_nsd["fmri_path"],
-        rois=fake_nsd["rois"],
+        rois=rois_override or fake_nsd["rois"],
         split=split,
         roi_beta_cache=fake_nsd["roi_beta_cache"],
         **kwargs,
@@ -245,6 +246,72 @@ def test_cache_built_for_other_rois_raises(fake_nsd):
     np.savez_compressed(target, **contents)
 
     with pytest.raises(ValueError, match="built for ROIs"):
+        dataset.load_fmri_data()
+
+
+def test_cache_with_extra_rois_serves_a_subset(fake_nsd):
+    """A cache built once with the full ROI list must serve any subset."""
+    full = _build(fake_nsd)
+    subset = _build(fake_nsd, rois_override=["MT"])
+
+    full_fmri = full.load_fmri_data()
+    subset_fmri = subset.load_fmri_data()
+
+    assert set(subset_fmri["subjA"]) == {"MT"}
+    np.testing.assert_array_equal(
+        subset_fmri["subjA"]["MT"], full_fmri["subjA"]["MT"]
+    )
+
+
+def test_cache_missing_a_requested_roi_raises(fake_nsd):
+    dataset = _build(fake_nsd)
+    target = dataset._cache_path("subjA")
+    with np.load(target) as cached:
+        contents = dict(cached)
+    contents["roi_names"] = np.asarray(["V1"])
+    contents["roi_vertex_counts"] = np.asarray([VERTS["V1"]])
+    np.savez_compressed(target, **contents)
+
+    with pytest.raises(ValueError, match="do not cover"):
+        dataset.load_fmri_data()
+
+
+def test_cache_with_wrong_vertex_count_raises(fake_nsd):
+    dataset = _build(fake_nsd)
+    target = dataset._cache_path("subjA")
+    with np.load(target) as cached:
+        contents = dict(cached)
+    contents["roi_vertex_counts"] = np.asarray([VERTS["V1"] + 1, VERTS["MT"] - 1])
+    np.savez_compressed(target, **contents)
+
+    with pytest.raises(ValueError, match="different atlas or stride"):
+        dataset.load_fmri_data()
+
+
+def test_missing_vertices_are_filled_with_zero(fake_nsd):
+    """Cells with no valid repetition are filled, not propagated as NaN."""
+    dataset = _build(fake_nsd)
+    target = dataset._cache_path("subjA")
+    with np.load(target) as cached:
+        contents = dict(cached)
+    contents["betas"][5, 1] = np.nan
+    np.savez_compressed(target, **contents)
+
+    fmri = dataset.load_fmri_data()
+    for roi_data in fmri["subjA"].values():
+        assert not np.isnan(roi_data).any()
+
+
+def test_entirely_missing_vertex_raises(fake_nsd):
+    """Filling a vertex with no data at all would create a constant feature."""
+    dataset = _build(fake_nsd)
+    target = dataset._cache_path("subjA")
+    with np.load(target) as cached:
+        contents = dict(cached)
+    contents["betas"][:, 1] = np.nan
+    np.savez_compressed(target, **contents)
+
+    with pytest.raises(ValueError, match="no valid value for any stimulus"):
         dataset.load_fmri_data()
 
 

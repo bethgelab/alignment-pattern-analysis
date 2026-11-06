@@ -1,0 +1,83 @@
+# Benchmark configuration for the Natural Scenes Dataset.
+#
+# NSD differs from BOLD Moments in three ways that show up here:
+#   - still images, so there is no frame_rate (build_dataset rejects it) and
+#     feature_extraction.num_frames stays 1
+#   - fsaverage surface rather than fsLR32k, so ROIs come from the FreeSurfer
+#     HCP-MMP1 annotation and vertices are decimated by subsample_stride
+#   - no train/test split of its own, so one is imposed deterministically on
+#     the stimulus id by dataset.train_fraction
+#
+# Model configs under configs/models/ apply unchanged: they only override the
+# feature_extraction subtree.
+
+dataset:
+  name: nsd
+  # Written by: python -m multitasking.nsd.prepare_stimuli
+  path: /mnt/lustre/work/bethge/bkr578/data/NSD/stimuli
+  resolution: 256
+  surface_space: fsaverage
+  # Fraction of the shared-1000 assigned to train. Applied to the stimulus id
+  # before intersecting with what the subjects saw, so a stimulus never changes
+  # split when the subject set changes.
+  train_fraction: 0.8
+
+fmri:
+  path: /mnt/lustre/work/bethge/bkr857/datasets/NSD
+  atlas_dir: /mnt/lustre/work/bethge/bkr857/datasets/NSD/atlas
+  # Written by: python -m multitasking.nsd.prepare_roi_betas
+  roi_beta_cache: /mnt/lustre/work/bethge/bkr578/data/NSD/cache
+  sub_id: "all"
+  # Subjects whose shared stimuli define the usable stimulus set. Keep this
+  # fixed at all eight even when sub_id is narrowed, so that benchmark and
+  # inter-subject runs are computed on identical stimuli.
+  stimulus_subject_ids: ["subj01", "subj02", "subj03", "subj04", "subj05", "subj06", "subj07", "subj08"]
+  # Repetitions a subject must have for a stimulus to be usable. At 2, the
+  # intersection over all eight subjects is 766 stimuli -> 618 train / 148 test.
+  # Restricting sub_id and stimulus_subject_ids to the four 40-session subjects
+  # (subj01, subj02, subj05, subj07) instead gives all 1000 -> 800 / 200.
+  min_n_trials: 2
+  # fsaverage has ~6x more vertices per hemisphere than fsLR32k.
+  subsample_stride: 6
+  roi_names: [
+    "V1", "V2", "V3", "V4", "V3A", "V3B", "V6", "V6A", "V7", "V8",
+    "FFC", "PIT", "IPS1", "MST", "MT",
+    "FST", "LO1", "LO2", "LO3"
+  ]
+  # NSD ships one NCSNR map per subject, estimated over that subject's full
+  # ~10k stimulus set, whereas BOLD Moments' is estimated over the training
+  # split with three repetitions. Comparable in scale, but not identical.
+  voxel_consistency_threshold: .2
+  apply_consistency_threshold: True
+
+feature_extraction:
+  model: taskonomy/autoencoding
+  layers:
+    - encoder.conv1
+    - encoder.layer1.0.conv2
+    - encoder.layer2.0.conv2
+    - encoder.layer3.0.conv2
+    - encoder.layer4.0.conv2
+    - encoder.compress1
+    - encoder.groupnorm
+  batch_size: 8
+  num_workers: 8
+  num_frames: 1
+
+feature_reduction:
+  method: srp
+  seed: 1234
+
+rsa:
+  enabled: True
+  dist_type: pearson
+  visualize_rdms: False
+
+versa:
+  enabled: False
+
+procrustes:
+  enabled: False
+
+linear_predictivity:
+  enabled: True
