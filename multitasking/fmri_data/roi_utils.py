@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+from typing import ClassVar
 
 import hcp_utils as hcp
 import numpy as np
@@ -12,7 +14,22 @@ class RoiMasks:
     Extracts brain ROI masks and allows mapping between the HCP-MMP
     (Human Connectome Project - Multimodal Parcellation) brain atlas
     and data.
+
+    This implementation reads the parcellation from ``hcp_utils``, i.e. it
+    works in fsLR32k grayordinate space. See
+    ``multitasking.fmri_data.roi_utils_fsaverage.RoiMasksFSAverage`` for the
+    fsaverage surface equivalent.
     """
+
+    surface_space: ClassVar[str] = "fsLR32k"
+
+    # Set by extract_rois(). Subclasses must populate all four, since the rest
+    # of the pipeline - and merge_roi_groups/map_rois_to_voxels below - rely on
+    # them. rois_to_indices must be contiguous and follow roi_names order.
+    rois: dict[str, np.ndarray]
+    rois_to_indices: dict[str, tuple[int, int]]
+    voxels_per_roi: dict[str, int]
+    hcp_roi_mask: np.ndarray
 
     def __init__(
         self,
@@ -59,9 +76,9 @@ class RoiMasks:
             for k, v in hcp.mmp.labels.items()
             if ("L_" in v or "left" in v or v == "brainstem")
         }  # create roi -> atlas ID mapping from atlas ID -> roi mapping
-        voxels_per_roi = dict.fromkeys(self.roi_names)
-        rois_to_indices = dict.fromkeys(self.roi_names)
-        rois = dict.fromkeys(self.roi_names)
+        voxels_per_roi: dict[str, int] = {}
+        rois_to_indices: dict[str, tuple[int, int]] = {}
+        rois: dict[str, np.ndarray] = {}
         start_idx = 0
         mask_true: list[int] = []
         for roi_name in self.roi_names:
@@ -75,15 +92,15 @@ class RoiMasks:
                 | (hcp.mmp.map_all == roi_atlas_ids[1])
             )[0]  # left + 180 = right
             # count the number of voxels in the roi
-            voxels_per_roi[roi_name] = len(rois[roi_name])  # type: ignore
+            voxels_per_roi[roi_name] = len(rois[roi_name])
             mask_true.extend(roi_atlas_ids)
             # below assumes that ROIs are extracted from the full dataarray
             # in the same order as listed in roi_names
             rois_to_indices[roi_name] = (
                 start_idx,
-                start_idx + voxels_per_roi[roi_name],  # type: ignore
+                start_idx + voxels_per_roi[roi_name],
             )
-            start_idx += voxels_per_roi[roi_name]  # type: ignore
+            start_idx += voxels_per_roi[roi_name]
         hcp_roi_mask[np.isin(hcp.mmp.map_all, mask_true)] = hcp.mmp.map_all[
             np.isin(hcp.mmp.map_all, mask_true)
         ]
@@ -153,6 +170,52 @@ class RoiMasks:
                 del self.rois[roi_name]
 
         self.roi_names = list(self.rois.keys())
+
+
+def build_roi_masks(
+    roi_names: list[str],
+    roi_groups: dict[str, list[str]] | None = None,
+    *,
+    surface_space: str = "fsLR32k",
+    atlas_dir: str | Path | None = None,
+    subsample_stride: int = 1,
+) -> RoiMasks:
+    """Builds ROI masks for the requested surface space.
+
+    Args:
+        roi_names: HCP-MMP parcel names, without a hemisphere prefix.
+        roi_groups: Optional ``{group_name: [roi names]}`` to merge.
+        surface_space: "fsLR32k" (BOLD Moments, via hcp_utils) or "fsaverage"
+            (NSD, via the FreeSurfer annotation).
+        atlas_dir: Directory with the ``.annot`` files; fsaverage only.
+        subsample_stride: Keep every n-th vertex; fsaverage only.
+
+    Returns:
+        An un-extracted RoiMasks instance; call ``extract_rois()`` on it.
+
+    Raises:
+        NotImplementedError: For a surface space that is recognised but whose
+            data has not been prepared.
+        ValueError: For an unknown surface space.
+    """
+    if surface_space == "fsLR32k":
+        return RoiMasks(roi_names, roi_groups)
+
+    if surface_space == "fsaverage":
+        # Imported here so that the fsLR32k path does not require nibabel.
+        from multitasking.fmri_data.roi_utils_fsaverage import RoiMasksFSAverage
+
+        return RoiMasksFSAverage(
+            roi_names,
+            roi_groups,
+            atlas_dir=atlas_dir,
+            subsample_stride=subsample_stride,
+        )
+
+    raise ValueError(
+        f"Unknown surface_space {surface_space!r}; expected 'fsLR32k' or "
+        "'fsaverage'."
+    )
 
 
 def main():
