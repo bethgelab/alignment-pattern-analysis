@@ -101,13 +101,28 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Prepares the containers for running the benchmark."""
+    """Prepares the container for running the benchmark.
+
+    Inter-subject consistency never instantiates a model, so unlike the
+    model benchmark this needs only the base image, linked under the name
+    submit_jobs passes as $CONTAINER.
+
+    Args:
+        output_path: The job directory to link the container into.
+
+    Raises:
+        FileNotFoundError: If the image is missing, naming where it is
+            expected.
+    """
     click.echo("Symlinking containers...")
-    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
+    source = PROJECT_ROOT / "singularity" / "multitasking_mmflow.sif"
     if not source.exists():
-        raise FileNotFoundError(f"Container {source} not found.")
-    destination = output_path / "container.sif"
-    os.symlink(source, destination)
+        raise FileNotFoundError(
+            f"Container {source} not found. Build it from "
+            "singularity/container.def, or symlink an existing image to "
+            "that path."
+        )
+    os.symlink(source.resolve(), output_path / "container.sif")
 
 
 def prepare_code(output_path: Path):
@@ -161,8 +176,9 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
     source_subjects: list[list[str]] = []
     for j, sub in enumerate(target_subjects):
         if n_partners == len(target_subjects) - 1:
-            # sample all other subjects once; include duplicate pairs
-            source_subjects = [s for s in target_subjects if s != sub]
+            # Every other subject once. Deterministic, unlike the sampled
+            # branch below, and it fills the pairwise matrix completely.
+            source_subjects_ = [s for s in target_subjects if s != sub]
         else:
             # exclude self and subjects for which we are the source
             exclude = [sub] + [s for (i, s) in enumerate(target_subjects[:j]) \
