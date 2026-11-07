@@ -1,11 +1,26 @@
 
 DIR=$(dirname "$(realpath "$0")")
 
+# aggregate_results.py writes its dataframes to $SCRATCH and the plotting
+# scripts read them back from there, so $SCRATCH must point at a directory
+# that outlives the run. Inside a SLURM job it is node-local and is deleted
+# when the job ends; on a login node it may not exist at all. Set it
+# explicitly when aggregating a dataset you intend to plot:
+#
+#   SCRATCH=... DATASET=nsd \
+#     OUTPUT_SUPDIR=.../nsd-benchmark-20261106/output \
+#     INTERSUBJECT_DIR=.../nsd-isc-loom-20261107/output \
+#     PAIRWISE_SUBJECT_DIR=.../nsd-isc-pairwise-20261107/output \
+#     ./run_aggregate_results.sh
+#
+# The three directories must each hold the per-run hash directories directly:
+# INTERSUBJECT_DIR and PAIRWISE_SUBJECT_DIR are listed non-recursively.
+
 # Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
 DATASET="${DATASET:-bold_moments}"
-OUTPUT_SUPDIR="$DIR/precomputed_results/benchmark/" # should contain subdirectories, including one named output
-INTERSUBJECT_DIR="$DIR/precomputed_results/intersubject" # should contain the (1) subdirectory that holds the intersubject results
-PAIRWISE_SUBJECT_DIR="$DIR/precomputed_results/pairwise" # should contain the (many) subdirectories that holds the pairwise subject results
+OUTPUT_SUPDIR="${OUTPUT_SUPDIR:-$DIR/precomputed_results/benchmark/}" # should contain subdirectories, including one named output
+INTERSUBJECT_DIR="${INTERSUBJECT_DIR:-$DIR/precomputed_results/intersubject}" # should contain the (1) subdirectory that holds the intersubject results
+PAIRWISE_SUBJECT_DIR="${PAIRWISE_SUBJECT_DIR:-$DIR/precomputed_results/pairwise}" # should contain the (many) subdirectories that holds the pairwise subject results
 APSIMILARITY_METRIC="pearson" # only pearson is supported for now
 MAIN_OUTCOME="score" # score, score_norm_upper, score_norm_lower
 
