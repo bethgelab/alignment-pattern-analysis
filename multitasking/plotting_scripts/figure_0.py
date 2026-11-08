@@ -232,6 +232,7 @@ def main(dataset, metric, main_outcome, split, plot_path, taskonomy):
     save_this(
         path=plot_path,
         fname=f"figure_0_{metric}_{main_outcome}_{taskonomy}",
+        formats=["png"],
         dpi=300,
         transparent=False,
     )
