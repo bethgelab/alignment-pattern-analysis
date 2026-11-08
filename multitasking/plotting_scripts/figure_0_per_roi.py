@@ -32,7 +32,7 @@ import seaborn as sns
 from matplotlib.axes import Axes
 
 from multitasking.analyses.dataframe_utils import get_order
-from multitasking.CONSTANTS import get_rois
+from multitasking.CONSTANTS import get_rois, parse_roi_names
 from multitasking.plot_creation.plot_utils import save_this
 
 logging.basicConfig(
@@ -256,6 +256,16 @@ def draw_roi_panel(
     help="Plot only this ROI. Default: every ROI of the dataset.",
 )
 @click.option(
+    "--exclude-rois",
+    type=str,
+    default="",
+    help=(
+        "Comma-separated ROI names to drop entirely, e.g. 'V6,V6A'. Must "
+        "match what aggregate_results was run with, since the alignment "
+        "patterns in the pickles are vectors over the retained ROIs."
+    ),
+)
+@click.option(
     "--order",
     type=click.Choice(["global", "within-roi"]),
     default="global",
@@ -289,12 +299,13 @@ def main(
     plot_path: Path | None,
     taskonomy: bool,
     roi: str | None,
+    exclude_rois: str,
     order: str,
     ylim_top: float | None,
     grid: bool,
 ) -> None:
     """Write one benchmark bar chart per ROI, plus an optional overview grid."""
-    rois = get_rois(dataset)
+    rois = get_rois(dataset, exclude=parse_roi_names(exclude_rois))
     if roi is not None:
         if roi not in rois:
             raise click.BadParameter(
