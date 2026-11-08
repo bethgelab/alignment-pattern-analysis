@@ -148,6 +148,9 @@ def main(dataset, metric, roi, main_outcome, split, plot_path):
         )
     )
     brain_brain_sim_df = brain_brain_ap.get_brain_brain_alignment_pattern_similarity(
+        rois=rois,
+        subjects=subjects,  # without these the defaults are BOLD Moments', and
+                            # another dataset's subjects all miss -> NaN similarity
         similarity_metric=model_brain_ap.similarity_metric # use same similarity metric as model-brain alignment patterns
     )
 
@@ -382,7 +385,7 @@ def main(dataset, metric, roi, main_outcome, split, plot_path):
     save_this(
         plot_path,
         f"figure_1_{roi}_{metric}_{main_outcome}",
-        formats=["png", "svg"],
+        formats=["png"],
         transparent=False,
         dpi=300,
     )
