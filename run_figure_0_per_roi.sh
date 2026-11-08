@@ -11,6 +11,11 @@ cd "$SCRIPT_DIR"
 # Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
 DATASET="${DATASET:-bold_moments}"
 
+# ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). An alignment pattern
+# is a vector over the retained ROIs, so this must match across the
+# aggregation and every figure built from it.
+EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
+
 # Where to write the figures. Empty means the script's own default,
 # results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
 # this explicitly when plotting another dataset.
@@ -42,7 +47,8 @@ for metric in $METRICS; do
                 --metric "$metric" \
                 --main-outcome "$main_outcome" \
                 --order "$ORDER" \
-                --taskonomy "$taskonomy" "${PLOT_ARGS[@]}"
+                --taskonomy "$taskonomy" "${PLOT_ARGS[@]}" \
+                --exclude-rois "$EXCLUDE_ROIS"
         done
     done
 done

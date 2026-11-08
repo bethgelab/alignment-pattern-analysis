@@ -18,6 +18,11 @@ DIR=$(dirname "$(realpath "$0")")
 
 # Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
 DATASET="${DATASET:-bold_moments}"
+
+# ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). An alignment pattern
+# is a vector over the retained ROIs, so this must match across the
+# aggregation and every figure built from it.
+EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
 OUTPUT_SUPDIR="${OUTPUT_SUPDIR:-$DIR/precomputed_results/benchmark/}" # should contain subdirectories of individual model runs
 INTERSUBJECT_DIR="${INTERSUBJECT_DIR:-$DIR/precomputed_results/intersubject}" # should contain the (1) subdirectory that holds the intersubject results
 PAIRWISE_SUBJECT_DIR="${PAIRWISE_SUBJECT_DIR:-$DIR/precomputed_results/pairwise}" # should contain the (many) subdirectories that holds the pairwise subject results
@@ -27,5 +32,5 @@ MAIN_OUTCOME="score" # score, score_norm_upper, score_norm_lower
 MAIN_OUTCOMES="score score_norm_lower" # score, score_norm_upper, score_norm_lower
 
 for main_outcome in $MAIN_OUTCOMES; do
-    python -m multitasking.analysis_scripts.aggregate_results --dataset "$DATASET" --output-supdir $OUTPUT_SUPDIR --intersubject-dir $INTERSUBJECT_DIR --pairwise-subject-dir $PAIRWISE_SUBJECT_DIR --aps-similarity-metric $APSIMILARITY_METRIC --main-outcome "$main_outcome"
+    python -m multitasking.analysis_scripts.aggregate_results --dataset "$DATASET" --output-supdir $OUTPUT_SUPDIR --intersubject-dir $INTERSUBJECT_DIR --pairwise-subject-dir $PAIRWISE_SUBJECT_DIR --aps-similarity-metric $APSIMILARITY_METRIC --main-outcome "$main_outcome" --exclude-rois "$EXCLUDE_ROIS"
 done

@@ -25,7 +25,7 @@ from multitasking.analyses.dataframe_utils import (
     select_top_layer,
 )
 from multitasking.analyses.equivalence_analysis import run_equivalence_analysis
-from multitasking.CONSTANTS import get_rois, get_subjects
+from multitasking.CONSTANTS import get_rois, get_subjects, parse_roi_names
 from multitasking.utils.scoresheet_loading import load_scoresheets_from_parent_dir
 
 # Configure logging
@@ -106,16 +106,30 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
           "merged into the output dataframe. Reading it needs odfpy."),
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
+@click.option(
+    "--exclude-rois",
+    type=str,
+    default="",
+    help=(
+        "Comma-separated ROI names to drop entirely, e.g. 'V6,V6A'. An "
+        "alignment pattern is a vector over the retained ROIs, so excluding "
+        "one changes every pattern, not only that ROI's entry."
+    ),
+)
 def main(dataset: str,
          output_supdir: Path,
          intersubject_dir: Path,
          pairwise_subject_dir: Path,
          aps_similarity_metric: str,
          model_attributes_path: Path,
+         exclude_rois: str,
          main_outcome: str = "score"):
     """Main function to aggregate and analyze results."""
-    rois = get_rois(dataset)
+    excluded = parse_roi_names(exclude_rois)
+    rois = get_rois(dataset, exclude=excluded)
     subjects = get_subjects(dataset)
+    if excluded:
+        logger.info(f"Excluding ROIs {excluded}; {len(rois)} remain: {rois}")
     SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 
     # Load and organize results
