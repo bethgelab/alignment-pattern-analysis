@@ -35,6 +35,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# The repo root, two levels up from multitasking/analysis_scripts/.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MODEL_ATTRIBUTES_PATH = PROJECT_ROOT / "model_attributes.ods"
+
 
 
 def bootstrap_rows_by_subject_fast(df, random_state=None):
@@ -94,11 +98,20 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
 )
+@click.option(
+    "--model-attributes-path",
+    default=str(DEFAULT_MODEL_ATTRIBUTES_PATH),
+    show_default=True,
+    help=("Spreadsheet of per-model attributes (architecture, training data, ...) "
+          "merged into the output dataframe. Reading it needs odfpy."),
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
 def main(dataset: str,
          output_supdir: Path,
          intersubject_dir: Path,
          pairwise_subject_dir: Path,
          aps_similarity_metric: str,
+         model_attributes_path: Path,
          main_outcome: str = "score"):
     """Main function to aggregate and analyze results."""
     rois = get_rois(dataset)
@@ -453,7 +466,6 @@ def main(dataset: str,
     # Add model attributes
     ############################################################
     # Load model attributes
-    model_attributes_path = Path("model_attributes.ods")
     model_attributes = pd.read_excel(model_attributes_path, engine="odf")
 
     # Merge the model attributes into main DF

@@ -9,6 +9,13 @@ cd "$SCRIPT_DIR"
 # Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
 DATASET="${DATASET:-bold_moments}"
 
+# Where to write the figures. Empty means the script's own default,
+# results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
+# this explicitly when plotting another dataset.
+PLOT_PATH="${PLOT_PATH:-}"
+PLOT_ARGS=()
+if [ -n "$PLOT_PATH" ]; then PLOT_ARGS=(--plot_path "$PLOT_PATH"); fi
+
 # Pull ROIs from multitasking.CONSTANTS
 ROIS=$(python3 -c "
 import sys
@@ -36,7 +43,7 @@ for metric in $METRICS; do
                 --dataset "$DATASET" \
                 --metric "$metric" \
                 --main-outcome "$main_outcome" \
-                --roi "$roi"
+                --roi "$roi" "${PLOT_ARGS[@]}"
         done
     done
 done
