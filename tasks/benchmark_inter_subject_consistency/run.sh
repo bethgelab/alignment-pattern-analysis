@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-#SBATCH --partition=2080-preemptable-galvani,bethge,2080-galvani
+# Inter-subject consistency compares brain to brain: it builds the dataset
+# and scores with numpy/sklearn, never instantiating a model. So it asks for
+# no GPU and can also run on the CPU partition, instead of idling on a GPU
+# and queueing behind the model benchmark for one.
+#SBATCH --partition=cpu-galvani,2080-preemptable-galvani,bethge,2080-galvani
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
-#SBATCH --gres=gpu:1
 #SBATCH --time=0-08:00
 
 set -euo pipefail
@@ -22,7 +25,7 @@ fi
 
 mkdir -p "$SCRATCH/home"
 
-srun singularity exec --nv \
+srun singularity exec \
     --home "$SCRATCH/home" \
     --pwd "$(pwd)" \
     --bind $SCRATCH \
