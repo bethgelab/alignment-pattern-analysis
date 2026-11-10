@@ -6,12 +6,14 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Which dataset's canonical ROI list to use: bold_moments (default) or nsd.
+# Which dataset's canonical ROI list to use: bold_moments (default),
+# nsd, or nsd_synthetic.
 DATASET="${DATASET:-bold_moments}"
 
 # ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). Must match what
 # aggregate_results was run with.
-EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
+# V6 and V6A are dropped by default: pass EXCLUDE_ROIS= to keep them.
+EXCLUDE_ROIS="${EXCLUDE_ROIS-V6,V6A}"
 
 # Alignment-pattern similarity metric the aggregation was run with: pearson or
 # mse. It is part of every pickle name, so it selects which aggregation to read.
