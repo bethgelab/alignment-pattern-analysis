@@ -6,13 +6,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
+# Which dataset's canonical ROI/subject lists to use: bold_moments
+# (default), nsd, or nsd_synthetic.
 DATASET="${DATASET:-bold_moments}"
 
 # ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). An alignment pattern
 # is a vector over the retained ROIs, so this must match across the
 # aggregation and every figure built from it.
-EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
+# V6 and V6A are dropped by default: pass EXCLUDE_ROIS= to keep them.
+EXCLUDE_ROIS="${EXCLUDE_ROIS-V6,V6A}"
 
 # Where to write the figures. Empty means the script's own default,
 # results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
@@ -21,11 +23,23 @@ PLOT_PATH="${PLOT_PATH:-}"
 PLOT_ARGS=()
 if [ -n "$PLOT_PATH" ]; then PLOT_ARGS=(--plot-path "$PLOT_PATH"); fi
 
+# Rank the models on another dataset's aggregation instead of this one's, so
+# the two can be read off a shared x-axis: give the $SCRATCH directory that
+# aggregate_results wrote for the reference dataset. Models absent from the
+# current results are dropped from the axis with a warning. Empty means rank
+# on this dataset's own scores.
+MODEL_ORDER_FROM="${MODEL_ORDER_FROM:-}"
+ORDER_ARGS=()
+if [ -n "$MODEL_ORDER_FROM" ]; then
+    ORDER_ARGS=(--model-order-from "$MODEL_ORDER_FROM")
+fi
+
 # Metrics: rsa, linear_predictivity
 METRICS="rsa linear_predictivity"
 
-# Main outcomes: score, score_norm_upper, score_norm_lower
-MAIN_OUTCOMES="score_norm_lower"
+# Main outcomes: score, score_norm_upper, score_norm_lower. "score" is the raw
+# alignment score, with no division by a noise ceiling.
+MAIN_OUTCOMES="${MAIN_OUTCOMES:-score_norm_lower}"
 
 echo "Metrics: $METRICS"
 echo "Main outcomes: $MAIN_OUTCOMES"
@@ -38,7 +52,7 @@ for metric in $METRICS; do
                 --dataset "$DATASET" \
             --metric "$metric" \
             --main-outcome "$main_outcome" \
-            --taskonomy False "${PLOT_ARGS[@]}" \
+            --taskonomy False "${PLOT_ARGS[@]}" "${ORDER_ARGS[@]}" \
                 --exclude-rois "$EXCLUDE_ROIS"
 
         echo "Running: metric=$metric main_outcome=$main_outcome taskonomy=True"
@@ -46,7 +60,7 @@ for metric in $METRICS; do
                 --dataset "$DATASET" \
             --metric "$metric" \
             --main-outcome "$main_outcome" \
-            --taskonomy True "${PLOT_ARGS[@]}" \
+            --taskonomy True "${PLOT_ARGS[@]}" "${ORDER_ARGS[@]}" \
                 --exclude-rois "$EXCLUDE_ROIS"
     done
 done

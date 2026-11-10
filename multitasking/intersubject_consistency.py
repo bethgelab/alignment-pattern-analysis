@@ -34,8 +34,10 @@ import numpy as np
 from benedict import benedict
 
 from multitasking.benchmark import (
+    check_splits_are_comparable,
     compute_linear_predictivity,
     compute_rsa,
+    stimulus_set_names,
 )
 from multitasking.datasets import build_dataset
 from multitasking.fmri_data.voxel_consistency import (
@@ -48,7 +50,7 @@ from multitasking.utils.get_representations import (
 
 LOGGER = logging.getLogger(__name__)
 
-SUPPORTED_DATASETS = ("bold_moments", "nsd")
+SUPPORTED_DATASETS = ("bold_moments", "nsd", "nsd_synthetic")
 
 SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 
@@ -167,6 +169,11 @@ def intersubject_consistency(
     if dataset_key in SUPPORTED_DATASETS:
         dataset_train = build_dataset(config, split="train")
         dataset_test = build_dataset(config, split="test")
+        check_splits_are_comparable(dataset_train, dataset_test)
+        # A `test_split` override is honoured here as well as in benchmark.py:
+        # running this with the same config is how the brain-brain reference
+        # for a cross-dataset run gets computed on the same stimuli.
+        stimulus_sets = stimulus_set_names(config, dataset_train, dataset_test)
 
         subject_ids = dataset_train.subject_ids
 
@@ -319,6 +326,7 @@ def intersubject_consistency(
                 splits,
                 output_path=output_dir,
                 subject_id=subject_id,
+                stimulus_sets=stimulus_sets,
             )
 
             compute_linear_predictivity(
@@ -330,6 +338,7 @@ def intersubject_consistency(
                 config,
                 output_path=output_dir,
                 subject_id=subject_id,
+                stimulus_sets=stimulus_sets,
             )
 
     else:

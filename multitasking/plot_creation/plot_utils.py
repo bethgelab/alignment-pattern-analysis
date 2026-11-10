@@ -136,12 +136,16 @@ def set_ticks_0_1(ax=None, start=0, step=0.2, stop =1, axis="y"):
     if axis == "y":
         ylim = ax.get_ylim()
         ticks = np.arange(start, stop, step)
+        # arange from a negative start lands on -2.8e-16 rather than 0, which
+        # the formatter below renders as "-0.0". No-op when start is 0.
+        ticks[np.abs(ticks) < 1e-9] = 0.0
         ax.yaxis.set_major_locator(FixedLocator(ticks))
         ax.yaxis.set_major_formatter(FixedFormatter([f"{t:.1f}" for t in ticks]))
         ax.set_ylim(ylim)
     elif axis == "x":
         xlim = ax.get_xlim()
         ticks = np.arange(start, stop, step)
+        ticks[np.abs(ticks) < 1e-9] = 0.0
         ax.xaxis.set_major_locator(FixedLocator(ticks))
         ax.xaxis.set_major_formatter(FixedFormatter([f"{t:.1f}" for t in ticks]))
         ax.set_xlim(xlim)
