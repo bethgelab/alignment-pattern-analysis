@@ -16,13 +16,15 @@ DIR=$(dirname "$(realpath "$0")")
 # The three directories must each hold the per-run hash directories directly:
 # INTERSUBJECT_DIR and PAIRWISE_SUBJECT_DIR are listed non-recursively.
 
-# Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
+# Which dataset's canonical ROI/subject lists to use: bold_moments
+# (default), nsd, or nsd_synthetic.
 DATASET="${DATASET:-bold_moments}"
 
 # ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). An alignment pattern
 # is a vector over the retained ROIs, so this must match across the
 # aggregation and every figure built from it.
-EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
+# V6 and V6A are dropped by default: pass EXCLUDE_ROIS= to keep them.
+EXCLUDE_ROIS="${EXCLUDE_ROIS-V6,V6A}"
 OUTPUT_SUPDIR="${OUTPUT_SUPDIR:-$DIR/precomputed_results/benchmark/}" # should contain subdirectories of individual model runs
 INTERSUBJECT_DIR="${INTERSUBJECT_DIR:-$DIR/precomputed_results/intersubject}" # should contain the (1) subdirectory that holds the intersubject results
 PAIRWISE_SUBJECT_DIR="${PAIRWISE_SUBJECT_DIR:-$DIR/precomputed_results/pairwise}" # should contain the (many) subdirectories that holds the pairwise subject results
