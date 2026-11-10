@@ -92,18 +92,23 @@ class PairwiseBrainBrainAlignmentPatterns(AlignmentPattern):
 
         Reference patterns are computed from all rows where the given subject
         does not participate as either predictor (model) or target.
+
+        Written as explicit loops rather than nested comprehensions: ``query``
+        resolves ``@name`` from the calling frame's locals, and a name that
+        only ever appears inside the query string is not captured as a free
+        variable of an inner comprehension, so ``@subject`` is unresolvable
+        there on Python < 3.12.
         """
-        reference_patterns_by_subject: dict[str, dict[str, np.ndarray]] = {
-            subject: {
-                roi: np.asarray(
+        reference_patterns_by_subject: dict[str, dict[str, np.ndarray]] = {}
+        for subject in subjects:
+            by_roi: dict[str, np.ndarray] = {}
+            for roi in rois:
+                by_roi[roi] = np.asarray(
                     self.alignment_pattern_df.query(
                         "layer == @roi and model != @subject and subject != @subject"
                     )[rois].squeeze()
                 )
-                for roi in rois
-            }
-            for subject in subjects
-        }
+            reference_patterns_by_subject[subject] = by_roi
         return reference_patterns_by_subject
 
     def get_target_pattern_dict_by_roi_subject(
@@ -113,18 +118,20 @@ class PairwiseBrainBrainAlignmentPatterns(AlignmentPattern):
 
         Target patterns are computed from rows where the given subject
         participates as the target subject.
+
+        Explicit loops for the same reason as in
+        :meth:`get_reference_pattern_dict_by_roi_subject`.
         """
-        target_patterns_by_subject: dict[str, dict[str, np.ndarray]] = {
-            subject: {
-                roi: np.asarray(
+        target_patterns_by_subject: dict[str, dict[str, np.ndarray]] = {}
+        for subject in subjects:
+            by_roi: dict[str, np.ndarray] = {}
+            for roi in rois:
+                by_roi[roi] = np.asarray(
                     self.alignment_pattern_df.query(
                         "layer == @roi and subject == @subject"
                     )[rois].squeeze()
                 )
-                for roi in rois
-            }
-            for subject in subjects
-        }
+            target_patterns_by_subject[subject] = by_roi
         return target_patterns_by_subject
 
     def get_avg_target_pattern_dict_by_roi(
@@ -159,8 +166,11 @@ class PairwiseBrainBrainAlignmentPatterns(AlignmentPattern):
                 callers should pass this explicitly.
             subjects: Subject names to compute similarity for. Defaults to the
                 BOLD Moments subject list.
-            similarity_metric: Similarity metric. Only ``"pearson"`` is
-                supported.
+            similarity_metric: Similarity metric, one of
+                :data:`~multitasking.analyses.alignment_patterns.base.SIMILARITY_METRICS`.
+                ``"mse"`` is reported negated, so that larger is more similar
+                for every metric, and the brain-brain value keeps its role as
+                the ceiling the models are compared against.
 
         Returns:
             DataFrame with columns: model, roi, subject, similarity.
