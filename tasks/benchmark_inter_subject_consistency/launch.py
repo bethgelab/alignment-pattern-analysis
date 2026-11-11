@@ -219,9 +219,7 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
 def prepare_slurm_script(output_path: Path, base_config: benedict):
     """Prepares the SLURM script for running the benchmark."""
     click.echo("Preparing SLURM script...")
-    source =( PROJECT_ROOT / "tasks" /
-                "bold_moments_benchmark_intersubject_consistency" /
-                "run.sh")
+    source = PROJECT_ROOT / "tasks" / "benchmark_inter_subject_consistency" / "run.sh"
     destination = output_path / "run.sh"
     shutil.copy(source, destination)
 
