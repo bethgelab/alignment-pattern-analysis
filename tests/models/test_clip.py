@@ -1,10 +1,12 @@
 """Unit tests for the CLIP models."""
 
-
 import pytest
 import torch
 
-from multitasking.models import clip
+# CLIP is an optional dependency, so skip the whole module when it is missing.
+pytest.importorskip("clip")
+
+from multitasking.models import clip  # noqa: E402
 
 
 @pytest.mark.parametrize("model_name", clip.list_models())
