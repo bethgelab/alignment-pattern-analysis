@@ -8,6 +8,7 @@ Usage:
 """
 
 import os
+import shlex
 import shutil
 from pathlib import Path
 
@@ -17,6 +18,45 @@ from executor import execute
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 CONFIG_ROOT = PROJECT_ROOT / "configs"
+
+
+def slurm_options_from_env(partition_variables: tuple[str, ...]) -> str:
+    """Builds the site-specific sbatch flags from the environment.
+
+    The `#SBATCH` lines in run.sh are comments that sbatch reads before any
+    shell runs, so they cannot expand environment variables. Site-specific
+    settings therefore have to arrive on the sbatch command line, where they
+    override the matching directive in the script. That keeps the names of
+    partitions, accounts and filesystems out of the repository.
+
+    Args:
+        partition_variables: Environment variables to consult for the
+            partition, in order of preference. The first one set wins.
+
+    Returns:
+        The flags, ready to splice into the sbatch command line. Empty if the
+        environment sets nothing, in which case the cluster defaults and the
+        directives in run.sh apply unchanged.
+    """
+    options: list[str] = []
+
+    for variable in partition_variables:
+        partition = os.environ.get(variable, "").strip()
+        if partition:
+            options.append(f"--partition {shlex.quote(partition)}")
+            break
+
+    account = os.environ.get("MULTITASKING_SLURM_ACCOUNT", "").strip()
+    if account:
+        options.append(f"--account {shlex.quote(account)}")
+
+    # Anything else this site needs -- --qos, --constraint, a different
+    # --gres -- passed through verbatim.
+    extra_args = os.environ.get("MULTITASKING_SLURM_EXTRA_ARGS", "").strip()
+    if extra_args:
+        options.append(extra_args)
+
+    return " ".join(options)
 
 
 @click.command()
@@ -146,6 +186,7 @@ def prepare_slurm_script(output_path: Path, base_config: benedict):
 def submit_jobs(output_path: Path, job_name: str, exclude: str, dry_run: bool):
     """Submits the jobs to the SLURM scheduler."""
     click.echo("Submitting jobs...")
+    env_slurm_options = slurm_options_from_env(("MULTITASKING_SLURM_PARTITION",))
     for config_path in sorted(output_path.glob("configs/*.yaml")):
         config = benedict.from_yaml(config_path)
         extra_slurm_options = config.get("slurm", {})
@@ -170,6 +211,9 @@ def submit_jobs(output_path: Path, job_name: str, exclude: str, dry_run: bool):
                 f"--output logs/%j_{config_path.stem}.log ",
                 f"--error logs/%j_{config_path.stem}.log ",
                 f"--exclude {exclude} " if len(exclude) > 0 else "",
+                f"{env_slurm_options} " if env_slurm_options else "",
+                # Listed last so a config's own slurm: block overrides the site
+                # defaults from the environment.
                 extra_slurm_options_str,
                 "run.sh",
             ]
