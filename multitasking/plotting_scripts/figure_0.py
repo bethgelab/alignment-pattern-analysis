@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
 )
-def main(dataset: str, metric, main_outcome, split, plot_path, taskonomy):
+def main(dataset, metric, main_outcome, split, plot_path, taskonomy):
     rois = get_rois(dataset)
     scratch = Path(os.environ.get("SCRATCH", "/scratch"))
     script_dir = Path(__file__).resolve().parent

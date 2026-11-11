@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
 )
-def main(dataset: str, metric, roi, main_outcome, split, plot_path):
+def main(dataset, metric, roi, main_outcome, split, plot_path):
     rois = get_rois(dataset)
     subjects = get_subjects(dataset)
     date_str = datetime.now().strftime("%Y%m%d")
