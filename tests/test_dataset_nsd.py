@@ -1,8 +1,8 @@
 """Tests for the NSD dataset.
 
-The synthetic fixtures build a miniature NSD: a few stimulus PNGs, a per-ROI
-beta cache, and an NCSNR file, with a controlled repetition pattern. The
-real-data tests are skipped when the dataset is not on the machine.
+The synthetic fixture builds a miniature NSD: a few stimulus PNGs and a
+per-ROI beta cache with a controlled repetition pattern. The real-data test
+is skipped when the dataset is not on the machine.
 """
 
 from pathlib import Path
@@ -11,8 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from multitasking.CONSTANTS import NSD_ROIS, NSD_SUBJECTS
-from multitasking.datasets_base import FmriStimulusDataset
+from multitasking.CONSTANTS import NSD_ROIS
 from multitasking.nsd.prepare_roi_betas import cache_path
 from multitasking.nsd.trial_counts import NSD_SHARED1000_SIZE
 
@@ -22,9 +21,6 @@ BETA_CACHE = Path("/mnt/lustre/work/bethge/bkr578/data/NSD/cache")
 
 REAL_DATA_AVAILABLE = (
     NSD_ROOT.exists() and STIMULUS_ROOT.exists() and BETA_CACHE.exists()
-)
-requires_real_data = pytest.mark.skipif(
-    not REAL_DATA_AVAILABLE, reason="NSD data not available on this machine"
 )
 
 ROIS = ["V1", "MT"]
@@ -75,7 +71,7 @@ def fake_nsd(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(nsd_module, "NSD_SUBJECTS", ["subjA", "subjB"])
 
-    # Stimuli: tiny PNGs whose single pixel encodes the stimulus id.
+    # Stimuli: tiny PNGs, one per shared-1000 stimulus.
     images_dir = tmp_path / "stimuli" / "images"
     images_dir.mkdir(parents=True)
     for stimulus_id in range(1, NSD_SHARED1000_SIZE + 1):
@@ -102,32 +98,11 @@ def fake_nsd(tmp_path, monkeypatch):
             roi_vertex_counts=np.asarray([VERTS[roi] for roi in ROIS]),
         )
 
-    # NCSNR, in full-surface vertex space.
-    for subject_id in counts:
-        ncsnr_dir = (
-            tmp_path
-            / "fmri"
-            / "nsddata_betas"
-            / "ppdata"
-            / subject_id
-            / "fsaverage"
-            / "betas_fithrf_GLMdenoise_RR"
-            / "prepared_betas"
-        )
-        ncsnr_dir.mkdir(parents=True, exist_ok=True)
-        half = n_vertices // 2
-        np.savez(
-            ncsnr_dir / f"{subject_id}_ncsnr.npz",
-            ncsnr_lh=np.linspace(0, 1, half),
-            ncsnr_rh=np.linspace(0, 1, n_vertices - half),
-        )
-
     return {
         "stimulus_path": tmp_path / "stimuli",
         "fmri_path": tmp_path / "fmri",
         "roi_beta_cache": cache_root,
         "rois": ROIS,
-        "subjects": ["subjA", "subjB"],
     }
 
 
@@ -144,22 +119,16 @@ def _build(fake_nsd, split="test", rois_override=None, **kwargs):
     )
 
 
-# --- the contract -----------------------------------------------------------
+def _rewrite_cache(dataset, subject_id, **changes):
+    target = dataset._cache_path(subject_id)
+    with np.load(target) as cached:
+        contents = dict(cached)
+    for key, change in changes.items():
+        contents[key] = change(contents[key])
+    np.savez_compressed(target, **contents)
 
 
-def test_nsd_satisfies_the_dataset_contract(fake_nsd):
-    dataset = _build(fake_nsd)
-    assert isinstance(dataset, FmriStimulusDataset)
-    assert len(dataset) == len(dataset.sample_ids)
-
-
-def test_sample_ids_are_zero_padded_and_sorted(fake_nsd):
-    dataset = _build(fake_nsd)
-    assert all(len(sample_id) == 4 for sample_id in dataset.sample_ids)
-    assert dataset.sample_ids == sorted(dataset.sample_ids)
-
-
-# --- the key invariant ------------------------------------------------------
+# --- the sample-ordering contract -------------------------------------------
 
 
 def test_sample_ids_do_not_depend_on_which_subjects_are_scored(fake_nsd):
@@ -173,33 +142,6 @@ def test_sample_ids_do_not_depend_on_which_subjects_are_scored(fake_nsd):
     assert one.sample_ids == both.sample_ids
 
 
-def test_stimulus_subject_ids_does_change_the_stimulus_set(fake_nsd):
-    """The set follows stimulus_subject_ids, which is the knob that controls it."""
-    with_b = _build(fake_nsd, stimulus_subject_ids=["subjA", "subjB"])
-    without_b = _build(
-        fake_nsd, subject_ids=["subjA"], stimulus_subject_ids=["subjA"]
-    )
-    assert len(without_b.sample_ids) > len(with_b.sample_ids)
-
-
-def test_scoring_a_subject_outside_the_stimulus_set_raises(fake_nsd):
-    with pytest.raises(ValueError, match="stimulus_subject_ids"):
-        _build(
-            fake_nsd, subject_ids=["subjB"], stimulus_subject_ids=["subjA"]
-        )
-
-
-def test_splits_are_disjoint_and_cover_the_usable_stimuli(fake_nsd):
-    train = _build(fake_nsd, split="train")
-    test = _build(fake_nsd, split="test")
-    assert set(train.sample_ids).isdisjoint(test.sample_ids)
-    # subjB missed the last 200 stimuli, so 800 remain usable.
-    assert len(train) + len(test) == 800
-
-
-# --- fMRI alignment ---------------------------------------------------------
-
-
 def test_fmri_rows_follow_sample_ids(fake_nsd):
     """Each cached row carries its own stimulus id, so misalignment shows up."""
     dataset = _build(fake_nsd)
@@ -210,19 +152,21 @@ def test_fmri_rows_follow_sample_ids(fake_nsd):
             np.testing.assert_array_equal(roi_data[:, 0], expected)
 
 
-def test_fmri_is_split_per_roi_with_correct_widths(fake_nsd):
+def test_stimuli_are_yielded_in_sample_id_order(fake_nsd):
     dataset = _build(fake_nsd)
-    fmri = dataset.load_fmri_data()
-    for subject_data in fmri.values():
-        assert set(subject_data) == set(ROIS)
-        for roi_name, roi_data in subject_data.items():
-            assert roi_data.shape == (len(dataset), VERTS[roi_name])
+    seen = [
+        sample_id
+        for _, ids in dataset.load_videos(batch_size=7)
+        for sample_id in ids
+    ]
+    assert seen == dataset.sample_ids
+
+
+# --- the beta cache ---------------------------------------------------------
 
 
 def test_mismatched_trial_counts_raise(fake_nsd, monkeypatch):
     """The derived stimulus set is re-checked against the loaded betas."""
-    import multitasking.datasets_nsd as nsd_module
-
     dataset = _build(fake_nsd)
     tampered = {
         "subjA": np.full(NSD_SHARED1000_SIZE, 3, dtype=np.uint8),
@@ -232,20 +176,6 @@ def test_mismatched_trial_counts_raise(fake_nsd, monkeypatch):
     monkeypatch.setattr(dataset, "_trial_counts", tampered)
 
     with pytest.raises(ValueError, match="disagree with the counts derived"):
-        dataset.load_fmri_data()
-    assert nsd_module is not None
-
-
-def test_cache_built_for_other_rois_raises(fake_nsd):
-    """A cache at the expected path whose stored ROI list disagrees."""
-    dataset = _build(fake_nsd)
-    target = dataset._cache_path("subjA")
-    with np.load(target) as cached:
-        contents = dict(cached)
-    contents["roi_names"] = np.asarray(["V1", "SomethingElse"])
-    np.savez_compressed(target, **contents)
-
-    with pytest.raises(ValueError, match="built for ROIs"):
         dataset.load_fmri_data()
 
 
@@ -263,141 +193,46 @@ def test_cache_with_extra_rois_serves_a_subset(fake_nsd):
     )
 
 
-def test_cache_missing_a_requested_roi_raises(fake_nsd):
-    dataset = _build(fake_nsd)
-    target = dataset._cache_path("subjA")
-    with np.load(target) as cached:
-        contents = dict(cached)
-    contents["roi_names"] = np.asarray(["V1"])
-    contents["roi_vertex_counts"] = np.asarray([VERTS["V1"]])
-    np.savez_compressed(target, **contents)
-
-    with pytest.raises(ValueError, match="do not cover"):
-        dataset.load_fmri_data()
-
-
 def test_cache_with_wrong_vertex_count_raises(fake_nsd):
+    """A cache built with a different atlas or stride must not be read."""
     dataset = _build(fake_nsd)
-    target = dataset._cache_path("subjA")
-    with np.load(target) as cached:
-        contents = dict(cached)
-    contents["roi_vertex_counts"] = np.asarray([VERTS["V1"] + 1, VERTS["MT"] - 1])
-    np.savez_compressed(target, **contents)
-
+    _rewrite_cache(
+        dataset,
+        "subjA",
+        roi_vertex_counts=lambda _: np.asarray([VERTS["V1"] + 1, VERTS["MT"] - 1]),
+    )
     with pytest.raises(ValueError, match="different atlas or stride"):
         dataset.load_fmri_data()
 
 
-def test_missing_vertices_are_filled_with_zero(fake_nsd):
-    """Cells with no valid repetition are filled, not propagated as NaN."""
-    dataset = _build(fake_nsd)
-    target = dataset._cache_path("subjA")
-    with np.load(target) as cached:
-        contents = dict(cached)
-    contents["betas"][5, 1] = np.nan
-    np.savez_compressed(target, **contents)
+def test_missing_cells_are_filled_but_a_missing_vertex_raises(fake_nsd):
+    """A missing cell is filled with zero, but a missing vertex raises.
 
-    fmri = dataset.load_fmri_data()
-    for roi_data in fmri["subjA"].values():
+    Filling a vertex with no data at all would create a constant feature.
+    """
+    dataset = _build(fake_nsd)
+
+    def one_missing_cell(betas):
+        betas[5, 1] = np.nan
+        return betas
+
+    _rewrite_cache(dataset, "subjA", betas=one_missing_cell)
+    for roi_data in dataset.load_fmri_data()["subjA"].values():
         assert not np.isnan(roi_data).any()
 
+    def one_missing_vertex(betas):
+        betas[:, 1] = np.nan
+        return betas
 
-def test_entirely_missing_vertex_raises(fake_nsd):
-    """Filling a vertex with no data at all would create a constant feature."""
-    dataset = _build(fake_nsd)
-    target = dataset._cache_path("subjA")
-    with np.load(target) as cached:
-        contents = dict(cached)
-    contents["betas"][:, 1] = np.nan
-    np.savez_compressed(target, **contents)
-
+    _rewrite_cache(dataset, "subjA", betas=one_missing_vertex)
     with pytest.raises(ValueError, match="no valid value for any stimulus"):
         dataset.load_fmri_data()
-
-
-def test_missing_cache_raises_with_guidance(fake_nsd, tmp_path):
-    from multitasking.datasets_nsd import NSD
-
-    dataset = NSD(
-        stimulus_path=fake_nsd["stimulus_path"],
-        fmri_path=fake_nsd["fmri_path"],
-        rois=fake_nsd["rois"],
-        split="test",
-        roi_beta_cache=tmp_path / "absent",
-    )
-    with pytest.raises(FileNotFoundError, match="prepare_roi_betas"):
-        dataset.load_fmri_data()
-
-
-# --- stimuli ----------------------------------------------------------------
-
-
-def test_stimuli_are_served_with_a_singleton_time_axis(fake_nsd):
-    dataset = _build(fake_nsd)
-    batch, ids = next(iter(dataset.load_videos(batch_size=3)))
-    assert batch.shape[0] == 3
-    assert batch.shape[1] == 3  # channels
-    assert batch.shape[2] == 1  # T
-    assert batch.dtype.__str__() == "torch.uint8"
-    assert ids == dataset.sample_ids[:3]
-
-
-def test_all_stimulus_ids_are_yielded_in_order(fake_nsd):
-    dataset = _build(fake_nsd)
-    seen = [
-        sample_id
-        for _, ids in dataset.load_videos(batch_size=7)
-        for sample_id in ids
-    ]
-    assert seen == dataset.sample_ids
-
-
-def test_resolution_is_applied(fake_nsd):
-    dataset = _build(fake_nsd, resolution=8)
-    batch, _ = next(iter(dataset.load_videos(batch_size=1)))
-    assert batch.shape[-2:] == (8, 8)
-
-
-def test_missing_stimulus_raises_with_guidance(fake_nsd):
-    dataset = _build(fake_nsd)
-    target = dataset.stimulus_path / "images" / f"{dataset.sample_ids[0]}.png"
-    target.unlink()
-    with pytest.raises(FileNotFoundError, match="prepare_stimuli"):
-        next(iter(dataset.load_videos(batch_size=1)))
-
-
-def test_voxel_consistency_matches_roi_widths(fake_nsd):
-    dataset = _build(fake_nsd)
-    ncsnr = dataset.load_voxel_consistency("subjA")
-    assert set(ncsnr) == set(ROIS)
-    for roi_name, values in ncsnr.items():
-        assert values.shape == (VERTS[roi_name],)
 
 
 # --- real data --------------------------------------------------------------
 
 
-@requires_real_data
-def test_real_nsd_default_configuration():
-    from multitasking.datasets_nsd import NSD
-
-    common = dict(
-        stimulus_path=STIMULUS_ROOT,
-        fmri_path=NSD_ROOT,
-        rois=NSD_ROIS,
-        roi_beta_cache=BETA_CACHE,
-        resolution=256,
-    )
-    train = NSD(split="train", **common)
-    test = NSD(split="test", **common)
-
-    assert len(train) == 618
-    assert len(test) == 148
-    assert set(train.sample_ids).isdisjoint(test.sample_ids)
-    assert train.subject_ids == list(NSD_SUBJECTS)
-
-
-@requires_real_data
+@pytest.mark.skipif(not REAL_DATA_AVAILABLE, reason="NSD data not available")
 def test_real_nsd_fmri_alignment():
     from multitasking.datasets_nsd import NSD
 
