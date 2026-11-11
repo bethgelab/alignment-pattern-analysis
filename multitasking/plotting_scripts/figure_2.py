@@ -61,7 +61,7 @@ DEFAULT_MODEL_ATTRIBUTES_PATH = PROJECT_ROOT / "model_attributes.ods"
 )
 @click.option(
     "--dataset",
-    type=click.Choice(["bold_moments", "nsd"]),
+    type=click.Choice(["bold_moments", "nsd", "nsd_synthetic"]),
     default="bold_moments",
     show_default=True,
     help="Which dataset's canonical ROI list to use.",

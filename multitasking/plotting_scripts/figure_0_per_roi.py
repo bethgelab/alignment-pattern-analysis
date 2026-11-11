@@ -31,7 +31,10 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.axes import Axes
 
-from multitasking.analyses.dataframe_utils import get_order
+from multitasking.analyses.dataframe_utils import (
+    align_order_to_available,
+    get_order,
+)
 from multitasking.CONSTANTS import get_rois, parse_roi_names
 from multitasking.plot_creation.plot_utils import save_this
 
@@ -81,11 +84,30 @@ def load_subject_avg_df(
     return df[keep]
 
 
+def order_pickle_dir(scratch: Path, model_order_from: Path | None) -> Path:
+    """Returns the directory the model ranking should be read from.
+
+    Args:
+        scratch: This dataset's own aggregation directory.
+        model_order_from: A reference aggregation, either its directory or the
+            ``subject_avg_df_equiv_score_norm_lower.pkl`` inside it. None
+            ranks on this dataset's own pickles.
+
+    Returns:
+        A directory holding ``subject_avg_df_equiv_*.pkl``.
+    """
+    if model_order_from is None:
+        return scratch
+    return model_order_from.parent if model_order_from.is_file() else model_order_from
+
+
 def global_model_order(scratch: Path, split: str, taskonomy: bool) -> list[str]:
     """Rank models worst-to-best the way ``figure_0`` does.
 
     Ordering by noise-ceiling-normalized RSA, pooled over ROIs, keeps the bars
     in the same position in every panel, so panels can be read side by side.
+    Pointing ``scratch`` at another dataset's aggregation extends that to
+    panels of different datasets.
 
     Args:
         scratch: Directory holding the aggregated pickles.
@@ -244,7 +266,7 @@ def draw_roi_panel(
 )
 @click.option(
     "--dataset",
-    type=click.Choice(["bold_moments", "nsd"]),
+    type=click.Choice(["bold_moments", "nsd", "nsd_synthetic"]),
     default="bold_moments",
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
@@ -263,6 +285,17 @@ def draw_roi_panel(
         "Comma-separated ROI names to drop entirely, e.g. 'V6,V6A'. Must "
         "match what aggregate_results was run with, since the alignment "
         "patterns in the pickles are vectors over the retained ROIs."
+    ),
+)
+@click.option(
+    "--model-order-from",
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, path_type=Path),
+    default=None,
+    help=(
+        "With --order global, rank the models on another aggregation instead "
+        "of this one, so two datasets can be plotted on a shared x-axis. "
+        "Either the $SCRATCH directory that aggregate_results wrote, or the "
+        "subject_avg_df_equiv_score_norm_lower.pkl inside it."
     ),
 )
 @click.option(
@@ -300,6 +333,7 @@ def main(
     taskonomy: bool,
     roi: str | None,
     exclude_rois: str,
+    model_order_from: Path | None,
     order: str,
     ylim_top: float | None,
     grid: bool,
@@ -327,10 +361,17 @@ def main(
     with open(project_root / "model_legend_mapping.json") as handle:
         model_labels = json.load(handle)
 
-    model_order = global_model_order(scratch, split, taskonomy)
+    order_scratch = order_pickle_dir(scratch, model_order_from)
+    model_order = global_model_order(order_scratch, split, taskonomy)
     subject_avg_df = load_subject_avg_df(
         scratch, main_outcome, split, metric, taskonomy
     )
+    if order_scratch != scratch:
+        model_order = align_order_to_available(
+            model_order,
+            set(subject_avg_df["model"].unique()),
+            str(order_scratch),
+        )
 
     missing_colors = sorted(set(model_order) - set(model_colors))
     missing_labels = sorted(set(model_order) - set(model_labels))

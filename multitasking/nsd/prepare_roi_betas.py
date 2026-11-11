@@ -40,6 +40,14 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_ATLAS_SUBDIR = "atlas"
 
+#: Directory component under the cache root. Parameterised rather than
+#: hardcoded so that a parallel stimulus set - NSD-synthetic - can keep its
+#: caches in a sibling tree that this one's superset lookup cannot reach.
+NSD_CACHE_DIRNAME = "nsd_roi_betas"
+
+#: Recorded in every cache so a reader can tell which stimulus set it holds.
+NSD_STIMULUS_SET = "nsd_shared1000"
+
 
 def roi_set_hash(
     roi_names: list[str], surface_space: str, subsample_stride: int
@@ -71,6 +79,8 @@ def cache_path(
     roi_names: list[str],
     surface_space: str,
     subsample_stride: int,
+    *,
+    dirname: str = NSD_CACHE_DIRNAME,
 ) -> Path:
     """Returns where a subject's per-ROI cache lives.
 
@@ -80,6 +90,8 @@ def cache_path(
         roi_names: ROI names, in concatenation order.
         surface_space: The surface space.
         subsample_stride: Vertex decimation stride.
+        dirname: Directory component identifying the stimulus set. Keyword-only
+            so that existing positional calls keep working unchanged.
 
     Returns:
         The ``.npz`` path.
@@ -87,7 +99,7 @@ def cache_path(
     digest = roi_set_hash(roi_names, surface_space, subsample_stride)
     return (
         output_dir
-        / "nsd_roi_betas"
+        / dirname
         / surface_space
         / f"stride{subsample_stride}"
         / digest
@@ -287,6 +299,7 @@ def prepare_roi_betas(
             surface_space=np.asarray(surface_space),
             subsample_stride=np.asarray(subsample_stride),
             normalized=np.asarray(normalized),
+            stimulus_set=np.asarray(NSD_STIMULUS_SET),
         )
         LOGGER.info(
             "%s: wrote %s (%.1f MB), %d stimuli with >=2 trials",

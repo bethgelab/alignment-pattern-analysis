@@ -19,9 +19,16 @@ import numpy as np
 
 LOGGER = logging.getLogger(__name__)
 
+#: Beta directory NSD-core's noise ceilings live beside. NSD-synthetic's sit in
+#: a sibling ``nsdsyntheticbetas_fithrf_GLMdenoise_RR`` under its own root.
+NSD_BETAS_DIRNAME = "betas_fithrf_GLMdenoise_RR"
+
 
 def nsd_ncsnr_path(
-    fmri_path: str | Path, subject_id: str, surface_space: str = "fsaverage"
+    fmri_path: str | Path,
+    subject_id: str,
+    surface_space: str = "fsaverage",
+    betas_dirname: str = NSD_BETAS_DIRNAME,
 ) -> Path:
     """Returns the path of a subject's NCSNR file.
 
@@ -29,6 +36,7 @@ def nsd_ncsnr_path(
         fmri_path: NSD root, the directory containing ``nsddata_betas``.
         subject_id: For example "subj01".
         surface_space: Currently only "fsaverage".
+        betas_dirname: The beta directory the NCSNR sits beside.
 
     Returns:
         The ``.npz`` path.
@@ -50,14 +58,18 @@ def nsd_ncsnr_path(
         / "ppdata"
         / subject_id
         / "fsaverage"
-        / "betas_fithrf_GLMdenoise_RR"
+        / betas_dirname
         / "prepared_betas"
         / f"{subject_id}_ncsnr.npz"
     )
 
 
 def load_nsd_ncsnr(
-    fmri_path: str | Path, subject_id: str, surface_space: str = "fsaverage"
+    fmri_path: str | Path,
+    subject_id: str,
+    surface_space: str = "fsaverage",
+    betas_dirname: str = NSD_BETAS_DIRNAME,
+    missing_hint: str | None = None,
 ) -> np.ndarray:
     """Loads a subject's whole-surface NCSNR.
 
@@ -68,6 +80,9 @@ def load_nsd_ncsnr(
         fmri_path: NSD root.
         subject_id: For example "subj01".
         surface_space: Currently only "fsaverage".
+        betas_dirname: The beta directory the NCSNR sits beside.
+        missing_hint: What to tell the caller to run when the file is absent.
+            Defaults to NSD-core's provenance.
 
     Returns:
         A 1-D array of length ``n_vertices_lh + n_vertices_rh``.
@@ -76,12 +91,18 @@ def load_nsd_ncsnr(
         FileNotFoundError: If the NCSNR file is missing.
         ValueError: If the file does not hold both hemispheres.
     """
-    path = nsd_ncsnr_path(fmri_path, subject_id, surface_space)
+    path = nsd_ncsnr_path(fmri_path, subject_id, surface_space, betas_dirname)
     if not path.exists():
         raise FileNotFoundError(
-            f"NSD noise ceiling not found at {path}. It is produced by "
-            "nsd_ncnsr_betas_fsaverage.py from the metrics_benchmark "
-            "repository."
+            f"NSD noise ceiling not found at {path}. "
+            + (
+                missing_hint
+                if missing_hint is not None
+                else (
+                    "It is produced by nsd_ncnsr_betas_fsaverage.py from the "
+                    "metrics_benchmark repository."
+                )
+            )
         )
 
     with np.load(path) as data:
