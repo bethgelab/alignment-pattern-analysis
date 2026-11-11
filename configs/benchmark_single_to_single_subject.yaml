@@ -38,7 +38,7 @@ rsa:
   dist_type: pearson
 
 versa:
-  enabled: True
+  enabled: False
   dist_type: pearson
   voxel_encoding:
     method: ridge
@@ -50,7 +50,7 @@ versa:
       cv: 5
 
 procrustes:
-  enabled: True
+  enabled: False
   frame_merge_strategy: average # only for datasets with data for multiple frames.  # concatenate or average or average_5 / 
   score_function: frobenius # frobenius (similarity function) or angular (distance function)
   n_components: 64 #98  # null or an integer

@@ -226,7 +226,6 @@ def main(output_supdir: Path,
         )
 
         model_brain_alignment_patterns.get_alignment_pattern_df(full_df, split="test")
-        logger.info("Computing model-brain alignment patterns similarity...")
         model_brain_similarities_df = \
             model_brain_alignment_patterns.get_alignment_pattern_similarity(
             subjects=subjects,
@@ -444,7 +443,7 @@ def main(output_supdir: Path,
     # Add model attributes
     ############################################################
     # Load model attributes
-    model_attributes_path = Path("/mnt/lustre/work/bethge/bkr578/projects/multitasking_201125/model_attributes.ods")
+    model_attributes_path = Path("model_attributes.ods")
     model_attributes = pd.read_excel(model_attributes_path, engine="odf")
 
     # Merge the model attributes into main DF

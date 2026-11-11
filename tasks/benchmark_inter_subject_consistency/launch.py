@@ -9,6 +9,7 @@ Usage:
 import os
 import shlex
 import shutil
+import sys
 from pathlib import Path
 
 import click
@@ -18,6 +19,10 @@ from executor import execute
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 CONFIG_ROOT = PROJECT_ROOT / "configs"
+
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from multitasking.CONSTANTS import BOLD_MOMENTS, get_subjects  # noqa: E402
 
 
 def slurm_options_from_env(partition_variables: tuple[str, ...]) -> str:
@@ -179,7 +184,7 @@ def prepare_configs_leave_one_out_mean(output_path: Path, base_config: benedict)
     output_path.mkdir(exist_ok=True, parents=True)
 
     # model_config_paths = list((CONFIG_ROOT / "models").glob("*.yaml"))
-    subjects = [f"sub-{i:02d}" for i in range(1, 11)]
+    subjects = get_subjects(base_config["dataset"].get("name", BOLD_MOMENTS))
 
     click.echo(f"Preparing configs for {len(subjects)} subjects...")
 
@@ -208,7 +213,7 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
     output_path.mkdir(exist_ok=True, parents=True)
 
     # model_config_paths = list((CONFIG_ROOT / "models").glob("*.yaml"))
-    target_subjects = [f"sub-{i:02d}" for i in range(1, 11)]
+    target_subjects = get_subjects(base_config["dataset"].get("name", BOLD_MOMENTS))
     assert n_partners < len(target_subjects), ( "n_partners must be at most one"
                                     " less than the number of target subjects")
 
@@ -259,7 +264,7 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
 def prepare_slurm_script(output_path: Path, base_config: benedict):
     """Prepares the SLURM script for running the benchmark."""
     click.echo("Preparing SLURM script...")
-    source = PROJECT_ROOT / "tasks" / "benchmark_inter_subject_consistency" / "run.sh"
+    source = Path(__file__).parent / "run.sh"
     destination = output_path / "run.sh"
     shutil.copy(source, destination)
 
