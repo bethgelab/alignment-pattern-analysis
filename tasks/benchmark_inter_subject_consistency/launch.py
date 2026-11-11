@@ -7,6 +7,7 @@ Usage:
 """
 
 import os
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -22,6 +23,45 @@ CONFIG_ROOT = PROJECT_ROOT / "configs"
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from multitasking.CONSTANTS import BOLD_MOMENTS, get_subjects  # noqa: E402
+
+
+def slurm_options_from_env(partition_variables: tuple[str, ...]) -> str:
+    """Builds the site-specific sbatch flags from the environment.
+
+    The `#SBATCH` lines in run.sh are comments that sbatch reads before any
+    shell runs, so they cannot expand environment variables. Site-specific
+    settings therefore have to arrive on the sbatch command line, where they
+    override the matching directive in the script. That keeps the names of
+    partitions, accounts and filesystems out of the repository.
+
+    Args:
+        partition_variables: Environment variables to consult for the
+            partition, in order of preference. The first one set wins.
+
+    Returns:
+        The flags, ready to splice into the sbatch command line. Empty if the
+        environment sets nothing, in which case the cluster defaults and the
+        directives in run.sh apply unchanged.
+    """
+    options: list[str] = []
+
+    for variable in partition_variables:
+        partition = os.environ.get(variable, "").strip()
+        if partition:
+            options.append(f"--partition {shlex.quote(partition)}")
+            break
+
+    account = os.environ.get("MULTITASKING_SLURM_ACCOUNT", "").strip()
+    if account:
+        options.append(f"--account {shlex.quote(account)}")
+
+    # Anything else this site needs -- --qos, --constraint, a different
+    # --gres -- passed through verbatim.
+    extra_args = os.environ.get("MULTITASKING_SLURM_EXTRA_ARGS", "").strip()
+    if extra_args:
+        options.append(extra_args)
+
+    return " ".join(options)
 
 
 @click.command()
@@ -106,13 +146,28 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Prepares the containers for running the benchmark."""
+    """Links the container image into the job directory.
+
+    Inter-subject consistency never instantiates a model, so unlike the model
+    benchmark it needs only the mmflow base image. It is linked here as
+    container.sif, the filename submit_jobs passes to run.sh as $CONTAINER.
+
+    Args:
+        output_path: The job directory to link the container into.
+
+    Raises:
+        FileNotFoundError: If the image is missing, naming where it is
+            expected.
+    """
     click.echo("Symlinking containers...")
-    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
+    source = PROJECT_ROOT / "singularity" / "multitasking_mmflow.sif"
     if not source.exists():
-        raise FileNotFoundError(f"Container {source} not found.")
-    destination = output_path / "container.sif"
-    os.symlink(source, destination)
+        raise FileNotFoundError(
+            f"Container {source} not found. Build it from "
+            "singularity/container.def, or symlink an existing image to "
+            "that path."
+        )
+    os.symlink(source.resolve(), output_path / "container.sif")
 
 
 def prepare_code(output_path: Path):
@@ -166,8 +221,9 @@ def prepare_configs_pairwise(output_path: Path, base_config: benedict,
     source_subjects: list[list[str]] = []
     for j, sub in enumerate(target_subjects):
         if n_partners == len(target_subjects) - 1:
-            # sample all other subjects once; include duplicate pairs
-            source_subjects = [s for s in target_subjects if s != sub]
+            # Every other subject once. Deterministic, unlike the sampled
+            # branch below, and it fills the pairwise matrix completely.
+            source_subjects_ = [s for s in target_subjects if s != sub]
         else:
             # exclude self and subjects for which we are the source
             exclude = [sub] + [s for (i, s) in enumerate(target_subjects[:j]) \
@@ -216,6 +272,11 @@ def prepare_slurm_script(output_path: Path, base_config: benedict):
 def submit_jobs(output_path: Path, job_name: str, exclude: str, dry_run: bool):
     """Submits the jobs to the SLURM scheduler."""
     click.echo("Submitting jobs...")
+    # Inter-subject consistency needs no GPU, so it prefers a CPU partition and
+    # falls back to the general one when the site defines no separate CPU one.
+    env_slurm_options = slurm_options_from_env(
+        ("MULTITASKING_SLURM_CPU_PARTITION", "MULTITASKING_SLURM_PARTITION")
+    )
     for config_path in sorted(output_path.glob("configs/*.yaml")):
         config = benedict.from_yaml(config_path)
         extra_slurm_options = config.get("slurm", {})
@@ -233,6 +294,9 @@ def submit_jobs(output_path: Path, job_name: str, exclude: str, dry_run: bool):
             f"--output logs/%j_{config_path.stem}.log ",
             f"--error logs/%j_{config_path.stem}.log ",
             f"--exclude {exclude} " if len(exclude) > 0 else "",
+            f"{env_slurm_options} " if env_slurm_options else "",
+            # Listed last so a config's own slurm: block overrides the site
+            # defaults from the environment.
             extra_slurm_options_str,
             "run.sh",
         ])
