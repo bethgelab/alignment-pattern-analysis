@@ -14,7 +14,6 @@ from benedict import benedict
 from multitasking.datasets import build_dataset
 from multitasking.fmri_data.voxel_consistency import (
     filter_by_voxel_consistency,
-    get_roi_wise_voxel_consistency,
 )
 from multitasking.metrics import RSA, LinearPredictivity
 from multitasking.utils.file_handling import config_hash
@@ -25,6 +24,8 @@ from multitasking.utils.get_representations import (
 from multitasking.utils.plotting import plot_rdm
 
 LOGGER = logging.getLogger(__name__)
+
+SUPPORTED_DATASETS = ("bold_moments", "nsd")
 
 SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 
@@ -121,7 +122,7 @@ def benchmark(
     dataset_key = config["dataset"].get("name", "bold_moments")
     splits = ["train", "test"]
 
-    if dataset_key == "bold_moments":
+    if dataset_key in SUPPORTED_DATASETS:
         dataset_train = build_dataset(config, split="train")
         dataset_test = build_dataset(config, split="test")
 
@@ -175,10 +176,8 @@ def benchmark(
                     f"threshold {threshold}")
 
         for subject_id in subject_ids:
-            ncsnr_per_roi = get_roi_wise_voxel_consistency(
-            config["fmri"],
-            dataset_train.roi_masks,
-            subject_id
+            ncsnr_per_roi = dataset_train.load_voxel_consistency(
+                subject_id
             )
             for roi in fmri_data_train[subject_id].keys():
                 mask = ncsnr_per_roi[roi] >= threshold

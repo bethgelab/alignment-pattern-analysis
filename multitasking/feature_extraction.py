@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from torch.nn import functional as F
 from tqdm import tqdm
 
-from multitasking.datasets import BoldMoments
+from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.models import build_model, get_default_layers
 
 LOGGER = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ LOGGER = logging.getLogger(__name__)
 
 def extract_model_representations(
     config: benedict,
-    dataset: BoldMoments,
+    dataset: FmriStimulusDataset,
     path: Path,
     reuse: bool = False,
 ) -> tuple[dict[str, torch.Tensor], list[str]]:
@@ -401,7 +401,7 @@ class FeatureExtractor:
         return FeatureExtractor(model, **kwargs)
 
     @torch.no_grad()
-    def __call__(self, dataset: BoldMoments, path: Path) -> FeatureBuffer:
+    def __call__(self, dataset: FmriStimulusDataset, path: Path) -> FeatureBuffer:
         """Extracts the features of the model for the given dataset.
 
         Parameters:

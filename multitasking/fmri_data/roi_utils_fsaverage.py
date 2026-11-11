@@ -8,6 +8,7 @@ so both datasets expose ROIs under the same names.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -45,7 +46,7 @@ class RoiMasksFSAverage(RoiMasks):
         self,
         roi_names: list[str],
         roi_groups: dict[str, list[str]] | None = None,
-        atlas_dir: str | Path | None = None,
+        atlas_dir: str | os.PathLike | None = None,
         subsample_stride: int = DEFAULT_SUBSAMPLE_STRIDE,
         strict_rois: bool = True,
     ) -> None:
