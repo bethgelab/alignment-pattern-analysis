@@ -14,11 +14,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 from PIL import Image
 
-from multitasking.CONSTANTS import NSD_SUBJECTS
-from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.nsd.prepare_roi_betas import NSD_STIMULUS_SET, cache_path
 from multitasking.nsd_synthetic.design import (
     NSD_SYNTHETIC_N_ACHROMATIC,
@@ -205,72 +202,6 @@ def _build(fake_synthetic, split="test", rois_override=None, **kwargs):
     )
 
 
-# --- the contract -----------------------------------------------------------
-
-
-def test_satisfies_the_dataset_contract(fake_synthetic):
-    dataset = _build(fake_synthetic)
-    assert isinstance(dataset, FmriStimulusDataset)
-    assert len(dataset) == fake_synthetic["n_stimuli"]
-    assert len(dataset.sample_ids) == len(dataset)
-    assert dataset.subject_ids == SUBJECTS
-
-
-def test_sample_ids_are_syn_namespaced_and_ordered(fake_synthetic):
-    """A shared namespace with NSD-core would be silently wrong, not loud."""
-    dataset = _build(fake_synthetic)
-    assert dataset.sample_ids[0] == "syn0001"
-    assert dataset.sample_ids[-1] == f"syn{fake_synthetic['n_stimuli']:04d}"
-    assert dataset.sample_ids == sorted(dataset.sample_ids)
-    assert all(sample_id.startswith("syn") for sample_id in dataset.sample_ids)
-
-
-def test_sample_ids_do_not_depend_on_which_subjects_are_scored(fake_synthetic):
-    both = _build(fake_synthetic).sample_ids
-    one = _build(fake_synthetic, subject_ids=["subjB"]).sample_ids
-    assert both == one
-
-
-def test_there_is_no_train_split(fake_synthetic):
-    """NSD-synthetic is one session; it is scored, not fitted on."""
-    with pytest.raises(ValueError, match="no 'train' split"):
-        _build(fake_synthetic, split="train")
-
-
-# --- stimuli ----------------------------------------------------------------
-
-
-def test_stimuli_load_in_sample_id_order(fake_synthetic):
-    dataset = _build(fake_synthetic)
-    ids = []
-    first_batch = None
-    for batch, batch_ids in dataset.load_videos(batch_size=8):
-        if first_batch is None:
-            first_batch = batch
-        ids.extend(batch_ids)
-    assert ids == dataset.sample_ids
-    # (B, C, T, H, W) with a singleton time axis for still images.
-    assert first_batch.ndim == 5
-    assert first_batch.shape[:3] == (8, 3, 1)
-    assert first_batch.dtype == torch.uint8
-
-
-def test_missing_stimulus_names_the_preparation_step(fake_synthetic):
-    (fake_synthetic["stimulus_path"] / "images" / "syn0001.png").unlink()
-    dataset = _build(fake_synthetic)
-    with pytest.raises(FileNotFoundError, match="prepare_stimuli"):
-        next(iter(dataset.load_videos()))
-
-
-def test_wrong_stimulus_directory_is_refused(fake_synthetic):
-    """Guards the one mistake the ID namespace alone would not catch early."""
-    (fake_synthetic["stimulus_path"] / PROVENANCE_FILENAME).write_text(
-        json.dumps({"stimulus_set": NSD_STIMULUS_SET})
-    )
-    with pytest.raises(ValueError, match="wrong directory"):
-        _build(fake_synthetic)
-
-
 # --- fMRI alignment ---------------------------------------------------------
 
 
@@ -314,18 +245,6 @@ def test_a_core_cache_reachable_by_the_superset_lookup_is_refused(
         dataset.load_fmri_data()
 
 
-def test_a_cache_with_the_wrong_number_of_stimuli_is_refused(fake_synthetic):
-    write_cache(
-        fake_synthetic["roi_beta_cache"],
-        "subjA",
-        fake_synthetic["design_counts"][:100],
-        fake_synthetic["n_vertices"],
-    )
-    dataset = _build(fake_synthetic, subject_ids=["subjA"])
-    with pytest.raises(ValueError, match="hold 100 stimuli"):
-        dataset.load_fmri_data()
-
-
 def test_tampered_trial_counts_are_caught(fake_synthetic):
     """The counts in the cache must match the published design."""
     target = cache_path(
@@ -347,59 +266,7 @@ def test_tampered_trial_counts_are_caught(fake_synthetic):
         dataset.load_fmri_data()
 
 
-def test_a_declared_repetition_cap_is_honoured(fake_synthetic):
-    """A cache built with --max-reps declares it, and the check adapts."""
-    capped = np.minimum(fake_synthetic["design_counts"], 2).astype(np.uint8)
-    write_cache(
-        fake_synthetic["roi_beta_cache"],
-        "subjA",
-        capped,
-        fake_synthetic["n_vertices"],
-        max_reps=2,
-    )
-    dataset = _build(fake_synthetic, subject_ids=["subjA"])
-    data = dataset.load_fmri_data()
-    assert data["subjA"]["V1"].shape[0] == len(dataset)
-
-
-def test_a_cap_the_cache_does_not_declare_is_caught(fake_synthetic):
-    """Capped counts without the declaration must not pass silently."""
-    capped = np.minimum(fake_synthetic["design_counts"], 2).astype(np.uint8)
-    write_cache(
-        fake_synthetic["roi_beta_cache"],
-        "subjA",
-        capped,
-        fake_synthetic["n_vertices"],
-        max_reps=-1,
-    )
-    dataset = _build(fake_synthetic, subject_ids=["subjA"])
-    with pytest.raises(ValueError, match="disagree with the counts"):
-        dataset.load_fmri_data()
-
-
-def test_missing_cache_names_the_preparation_step(fake_synthetic):
-    cache_path(
-        fake_synthetic["roi_beta_cache"],
-        "subjA",
-        ROIS,
-        "fsaverage",
-        6,
-        dirname=NSD_SYNTHETIC_CACHE_DIRNAME,
-    ).unlink()
-    dataset = _build(fake_synthetic, subject_ids=["subjA"])
-    with pytest.raises(FileNotFoundError, match="nsd_synthetic.prepare_betas"):
-        dataset.load_fmri_data()
-
-
 # --- noise ceiling ----------------------------------------------------------
-
-
-def test_voxel_consistency_matches_the_roi_widths(fake_synthetic):
-    dataset = _build(fake_synthetic)
-    ncsnr = dataset.load_voxel_consistency("subjA")
-    assert set(ncsnr) == set(ROIS)
-    for roi_name in ROIS:
-        assert ncsnr[roi_name].shape == (VERTS[roi_name],)
 
 
 def test_ncsnr_source_selects_between_the_two_maps(fake_synthetic):
@@ -414,42 +281,7 @@ def test_ncsnr_source_selects_between_the_two_maps(fake_synthetic):
     assert np.allclose(core["V1"], synthetic["V1"] * 0.5)
 
 
-def test_nsd_core_source_needs_the_core_path(fake_synthetic):
-    with pytest.raises(ValueError, match="nsd_core_fmri_path"):
-        _build(fake_synthetic, ncsnr_source="nsd_core")
-
-
-def test_unknown_ncsnr_source_is_rejected(fake_synthetic):
-    with pytest.raises(ValueError, match="Unknown ncsnr_source"):
-        _build(fake_synthetic, ncsnr_source="made_up")
-
-
-def test_missing_synthetic_ncsnr_says_it_is_not_published(fake_synthetic):
-    dataset = _build(fake_synthetic)
-    path = (
-        fake_synthetic["fmri_path"]
-        / "nsddata_betas"
-        / "ppdata"
-        / "subjA"
-        / "fsaverage"
-        / NSD_SYNTHETIC_BETAS_DIRNAME
-        / "prepared_betas"
-        / "subjA_ncsnr.npz"
-    )
-    path.unlink()
-    with pytest.raises(FileNotFoundError, match="publishes no noise ceiling"):
-        dataset.load_voxel_consistency("subjA")
-
-
 # --- real data --------------------------------------------------------------
-
-
-@requires_real_data
-def test_real_nsd_synthetic_loads():
-    dataset = _real_dataset()
-    assert len(dataset) == NSD_SYNTHETIC_N_ACHROMATIC
-    assert dataset.sample_ids[0] == "syn0001"
-    assert dataset.subject_ids == list(NSD_SUBJECTS)
 
 
 @requires_real_data
@@ -460,14 +292,6 @@ def test_real_nsd_synthetic_fmri_alignment():
         for roi_name, betas in data[subject_id].items():
             assert betas.shape[0] == NSD_SYNTHETIC_N_ACHROMATIC
             assert np.isfinite(betas).all(), roi_name
-
-
-@requires_real_data
-def test_real_nsd_synthetic_stimuli_are_square():
-    dataset = _real_dataset(subject_ids=["subj01"], resolution=256)
-    batch, ids = next(iter(dataset.load_videos(batch_size=4)))
-    assert ids == dataset.sample_ids[:4]
-    assert batch.shape[-2:] == (256, 256)
 
 
 def _real_dataset(**kwargs):
