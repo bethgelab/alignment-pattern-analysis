@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from multitasking.analyses.alignment_patterns.base import SIMILARITY_METRICS
 from multitasking.analyses.alignment_patterns.brain_brain_alignment_patterns import (
     PairwiseBrainBrainAlignmentPatterns,
 )
@@ -82,8 +83,18 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
 @click.option(
     '--aps-similarity-metric',
     default='pearson',
-    help='Similarity metric to use for alignment pattern similarity (default: pearson)',
-    type=click.Choice(['pearson']),
+    show_default=True,
+    help=(
+        "Similarity metric for comparing alignment patterns. 'mse' is the "
+        "mean squared error between two patterns, reported negated so that "
+        "larger stays 'more similar' for every metric: the best model is "
+        "still the maximum and the equivalence bands still open downwards. "
+        "Unlike 'pearson' it is sensitive to scale and offset, so its values "
+        "are only comparable within one --main-outcome. The pickles this "
+        "script writes are NOT named after this choice, so run a second "
+        "metric into a different $SCRATCH or it overwrites the first."
+    ),
+    type=click.Choice(list(SIMILARITY_METRICS)),
 )
 @click.option(
     '--main-outcome',
