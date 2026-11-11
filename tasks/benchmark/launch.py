@@ -81,10 +81,12 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Prepares the containers for running the benchmark.
+    """Links the two container images into the job directory.
 
-    submit_jobs selects a container per model, so both variants are linked
-    under the names it passes as $CONTAINER.
+    The benchmark needs two images: models whose name starts with "mmaction2"
+    run in the mmaction2 image, every other model in the mmflow image. Both
+    are linked here as container_<variant>.sif. submit_jobs then picks the one
+    each model needs and passes that filename to run.sh as $CONTAINER.
 
     Args:
         output_path: The job directory to link the containers into.

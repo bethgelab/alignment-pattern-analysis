@@ -101,11 +101,11 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Prepares the container for running the benchmark.
+    """Links the container image into the job directory.
 
-    Inter-subject consistency never instantiates a model, so unlike the
-    model benchmark this needs only the base image, linked under the name
-    submit_jobs passes as $CONTAINER.
+    Inter-subject consistency never instantiates a model, so unlike the model
+    benchmark it needs only the mmflow base image. It is linked here as
+    container.sif, the filename submit_jobs passes to run.sh as $CONTAINER.
 
     Args:
         output_path: The job directory to link the container into.
