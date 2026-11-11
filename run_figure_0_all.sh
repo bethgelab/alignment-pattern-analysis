@@ -13,7 +13,8 @@ DATASET="${DATASET:-bold_moments}"
 # ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). An alignment pattern
 # is a vector over the retained ROIs, so this must match across the
 # aggregation and every figure built from it.
-EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
+# V6 and V6A are dropped by default: pass EXCLUDE_ROIS= to keep them.
+EXCLUDE_ROIS="${EXCLUDE_ROIS-V6,V6A}"
 
 # Where to write the figures. Empty means the script's own default,
 # results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
