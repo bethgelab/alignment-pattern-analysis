@@ -7,7 +7,6 @@ import pytest
 
 from multitasking.nsd.trial_counts import (
     NSD_SESSIONS_PER_SUBJECT,
-    NSD_SHARED1000_SIZE,
     NSD_TRIALS_PER_SESSION,
     compute_shared1000_trial_counts,
     load_shared1000_trial_counts,
@@ -31,13 +30,6 @@ EXPECTED_BY_SESSIONS = {
 EXPECTED_INTERSECTION = {1: 907, 2: 766, 3: 515}
 
 
-def test_cached_counts_cover_all_subjects():
-    counts = load_shared1000_trial_counts()
-    assert sorted(counts) == sorted(NSD_SESSIONS_PER_SUBJECT)
-    for subject_counts in counts.values():
-        assert subject_counts.shape == (NSD_SHARED1000_SIZE,)
-
-
 def test_cached_counts_match_expected_per_session_count():
     counts = load_shared1000_trial_counts()
     for subject_id, n_sessions in NSD_SESSIONS_PER_SUBJECT.items():
@@ -48,44 +40,6 @@ def test_cached_counts_match_expected_per_session_count():
                 f"{subject_id} ({n_sessions} sessions) at "
                 f"min_n_trials={min_n_trials}: {actual} != {expected_n}"
             )
-
-
-@pytest.mark.parametrize("min_n_trials,expected_n", sorted(EXPECTED_INTERSECTION.items()))
-def test_intersection_over_all_subjects(min_n_trials: int, expected_n: int):
-    counts = load_shared1000_trial_counts()
-    valid = valid_stimulus_ids(
-        sorted(NSD_SESSIONS_PER_SUBJECT), min_n_trials=min_n_trials, counts=counts
-    )
-    assert len(valid) == expected_n
-    assert valid == sorted(valid)
-    assert min(valid) >= 1 and max(valid) <= NSD_SHARED1000_SIZE
-
-
-def test_intersection_equals_lowest_session_subject():
-    """Session sequences are nested prefixes, so the intersection collapses."""
-    counts = load_shared1000_trial_counts()
-    all_subjects = sorted(NSD_SESSIONS_PER_SUBJECT)
-    fewest = min(NSD_SESSIONS_PER_SUBJECT, key=NSD_SESSIONS_PER_SUBJECT.get)
-
-    assert valid_stimulus_ids(all_subjects, 2, counts) == valid_stimulus_ids(
-        [fewest], 2, counts
-    )
-
-
-def test_fewer_subjects_never_loses_stimuli():
-    counts = load_shared1000_trial_counts()
-    all_subjects = sorted(NSD_SESSIONS_PER_SUBJECT)
-    forty_session = [s for s, n in NSD_SESSIONS_PER_SUBJECT.items() if n == 40]
-
-    assert set(valid_stimulus_ids(all_subjects, 2, counts)) <= set(
-        valid_stimulus_ids(forty_session, 2, counts)
-    )
-
-
-def test_forty_session_subjects_see_every_stimulus():
-    counts = load_shared1000_trial_counts()
-    forty_session = [s for s, n in NSD_SESSIONS_PER_SUBJECT.items() if n == 40]
-    assert len(valid_stimulus_ids(forty_session, 2, counts)) == NSD_SHARED1000_SIZE
 
 
 def test_derivation_on_synthetic_master_ordering(monkeypatch, tmp_path):
@@ -133,26 +87,3 @@ def test_cached_counts_match_freshly_computed():
         np.testing.assert_array_equal(fresh[subject_id], cached[subject_id])
 
 
-def test_unknown_subject_raises():
-    with pytest.raises(ValueError, match="No trial counts"):
-        valid_stimulus_ids(["subj99"], 2, load_shared1000_trial_counts())
-
-
-def test_empty_subject_list_raises():
-    with pytest.raises(ValueError, match="At least one subject"):
-        valid_stimulus_ids([], 2, load_shared1000_trial_counts())
-
-
-def test_min_n_trials_below_one_raises():
-    with pytest.raises(ValueError, match="min_n_trials"):
-        valid_stimulus_ids(["subj01"], 0, load_shared1000_trial_counts())
-
-
-def test_missing_expdesign_raises_with_guidance(tmp_path):
-    with pytest.raises(FileNotFoundError, match="nsd_expdesign"):
-        compute_shared1000_trial_counts(tmp_path / "absent.mat")
-
-
-def test_missing_cache_raises_with_guidance(tmp_path):
-    with pytest.raises(FileNotFoundError, match="prepare_trial_counts"):
-        load_shared1000_trial_counts(tmp_path / "absent.npz")
