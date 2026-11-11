@@ -34,12 +34,9 @@ import numpy as np
 from benedict import benedict
 
 from multitasking.benchmark import (
-    compute_anshksoni_metric,
     compute_linear_predictivity,
     compute_rsa,
-    compute_versa,
 )
-from multitasking.compute_procrustes import compute_procrustes
 from multitasking.datasets import build_dataset
 from multitasking.fmri_data.voxel_consistency import (
     filter_by_voxel_consistency,
@@ -53,6 +50,37 @@ from multitasking.utils.get_representations import (
 LOGGER = logging.getLogger(__name__)
 
 SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
+
+# Metrics that were present in an internal branch but are not part of this release.
+# Their implementations (compute_versa, compute_procrustes, compute_anshksoni_metric)
+# do not exist in this repository, so a config requesting them cannot be honoured.
+UNSUPPORTED_METRICS = ("versa", "procrustes")
+
+
+def _check_unsupported_metrics(config: benedict) -> None:
+    """Fails loudly if the config asks for a metric this release cannot compute.
+
+    Args:
+        config: The full configuration dictionary.
+
+    Raises:
+        NotImplementedError: If versa, procrustes or anshksoni metrics are enabled.
+    """
+    requested = [
+        name
+        for name in UNSUPPORTED_METRICS
+        if config.get(f"{name}.enabled", False)
+    ]
+    if config.get("anshksoni_metrics", {}):
+        requested.append("anshksoni_metrics")
+
+    if requested:
+        raise NotImplementedError(
+            f"The following metrics are enabled in the config but are not part of "
+            f"this release: {', '.join(requested)}. Set them to false (or remove "
+            "them) to run the intersubject consistency analysis with RSA and linear "
+            "predictivity."
+        )
 
 
 @click.command()
@@ -109,6 +137,8 @@ def intersubject_consistency(
     config["config_hash"] = config_full_hash
     config["config_str"] = config_str
     config["overwrite"] = overwrite
+
+    _check_unsupported_metrics(config)
 
     # Consistency checks for pairwise intersubject runs
     _mode = config["fmri"]["intersubject"]["mode"]
@@ -194,15 +224,7 @@ def intersubject_consistency(
             if "source_sub_ids" in config["fmri"]["intersubject"]:
                 source_sub_ids_all = config["fmri"]["intersubject"]["source_sub_ids"]
             else:
-#<<<<<<< anshksoni_metrics
-#                assert np.all([sub in subject_ids for sub in subs_for_intersubject]), (
-#                    f"Subjects for intersubject consistency must be in {subject_ids}"
-#                )
-#        else:
-#            subs_for_intersubject = subject_ids
-#=======
                 source_sub_ids_all = None
-#>>>>>>> main
 
         for idx, subject_id in enumerate(subs_for_intersubject):
             LOGGER.info(f"Computing intersubject alignment metrics "
@@ -289,8 +311,6 @@ def intersubject_consistency(
                     )
                 LOGGER.warning("Shuffled fMRI data wrt the model data.")
 
-            n_frames = 1
-
             compute_rsa(
                 config,
                 split_mean_representation,
@@ -300,32 +320,6 @@ def intersubject_consistency(
                 splits,
                 output_path=output_dir,
                 subject_id=subject_id,
-            )
-
-            compute_versa(
-                split_mean_representation,
-                split_brain_representation,
-                rois,
-                rois,
-                splits,
-                config,
-                output_path=output_dir,
-                subject_id=subject_id,
-            )
-
-            compute_procrustes(
-                split_mean_representation,
-                split_brain_representation,
-                rois,
-                rois,
-                splits,
-                config,
-                overwrite_score=config["overwrite"],
-                n_frames=n_frames,
-                use_cv_ankhsoni_prokrustes=config["procrustes"].get(
-                    "use_cv_ankhsoni_prokrustes",
-                    False,
-                ),
             )
 
             compute_linear_predictivity(
@@ -338,19 +332,6 @@ def intersubject_consistency(
                 output_path=output_dir,
                 subject_id=subject_id,
             )
-
-            for metric_name in config.get("anshksoni_metrics", {}).keys():
-                compute_anshksoni_metric(
-                    metric_name,
-                    split_mean_representation,
-                    split_brain_representation,
-                    rois,
-                    rois,
-                    splits,
-                    config,
-                    output_path=output_dir,
-                    subject_id=subject_id,
-                )
 
     else:
         raise ValueError(f"Dataset {dataset_key} not supported!")

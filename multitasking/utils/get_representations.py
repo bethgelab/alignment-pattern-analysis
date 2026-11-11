@@ -11,6 +11,9 @@ from multitasking.utils.file_handling import config_hash
 
 LOGGER = logging.getLogger(__name__)
 
+SAMPLE_IDS_KEY = "__sample_ids__"
+"""Key under which the sample IDs are stored in the reduced-feature cache."""
+
 
 def compute_model_representation(
     config: dict,
@@ -90,7 +93,23 @@ def compute_model_representation(
             f"Reusing the cached reduced model representation at "
             f"{feature_reduction_cache_path}"
         )
-        reduced_features = np.load(feature_reduction_cache_path)
+        with np.load(feature_reduction_cache_path) as cached:
+            reduced_features = {key: cached[key] for key in cached.files}
+
+        cached_sample_ids = reduced_features.pop(SAMPLE_IDS_KEY, None)
+        if cached_sample_ids is None:
+            raise ValueError(
+                f"Reduced-feature cache {feature_reduction_cache_path} predates "
+                "sample-ID tracking and cannot be verified against the current "
+                "dataset. Delete it or rerun with --overwrite-cache."
+            )
+        if [str(sample_id) for sample_id in cached_sample_ids] != list(
+            dataset.sample_ids
+        ):
+            raise ValueError(
+                f"Reduced-feature cache {feature_reduction_cache_path} was built for "
+                "a different sample set or order than the current dataset."
+            )
 
     else:
         # Otherwise, we may be able to reuse the cached feature extraction, but have to
@@ -100,7 +119,9 @@ def compute_model_representation(
                 "Reusing the cached model representation at "
                 f"{feature_extraction_cache_path}"
             )
-            features = FeatureBuffer(feature_extraction_cache_path)
+            features = FeatureBuffer(
+                feature_extraction_cache_path, sample_ids=dataset.sample_ids
+            )
 
         else:
             LOGGER.info("Extracting model features ...")
@@ -138,7 +159,9 @@ def compute_model_representation(
                     }"
             )
         feature_reduction_cache_path.parent.mkdir(parents=True, exist_ok=True)
-        np.savez(feature_reduction_cache_path, **reduced_features)
+        cache_payload = dict(reduced_features)
+        cache_payload[SAMPLE_IDS_KEY] = np.asarray(dataset.sample_ids)
+        np.savez(feature_reduction_cache_path, **cache_payload)
         LOGGER.info("Reducing model features completed.")
         LOGGER.info(f"Last reduced layer size: {reduced_features[layer].shape}")
 

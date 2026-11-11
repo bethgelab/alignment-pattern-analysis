@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 from benedict import benedict
 
 from multitasking.fmri_data.load_fmri import load_dataset
@@ -29,7 +30,13 @@ def test_load_fmri_configs_same_rois_yield_same_data(
 ):
     config_path_1 = _resolve_config_path(str(config_path_1))
     config_path_2 = _resolve_config_path(str(config_path_2))
+    if not config_path_1.exists() or not config_path_2.exists():
+        pytest.skip("Test configs not available")
+
     config_1 = benedict.from_yaml(config_path_1)
+    if not Path(config_1["fmri.path"]).exists():
+        pytest.skip("BOLD Moments fmri path not available on this machine")
+
     roi_masks_1 = RoiMasks(roi_names=config_1["fmri.roi_names"])
     roi_masks_1.extract_rois()
     fmri_data_1, _ = load_dataset(config_1, roi_masks_1)

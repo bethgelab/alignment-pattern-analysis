@@ -110,7 +110,7 @@ def test_boldmoments_video_and_fmri_order_consistency(tmp_path):
     frame_rate = 4
 
     # Create 5 mock video files
-    sample_ids = [f"{i:04d}" for i in range(1001, 1006)]
+    sample_ids = [f"{i:04d}" for i in range(1, 6)]
     for sid in sample_ids:
         (video_path / "mp4_h264" / f"{sid}.mp4").touch()
 
@@ -118,7 +118,7 @@ def test_boldmoments_video_and_fmri_order_consistency(tmp_path):
     for subject_id in subject_ids:
         # Create data
         mock_data = np.random.rand(5, 10, 91282)
-        mock_sample_ids = [f"vid{i:04d}" for i in range(1001, 1006)]
+        mock_sample_ids = [f"vid{i:04d}" for i in range(1, 6)]
         # Create pkl file and dump data
         tmp_f = (
             fmri_path
@@ -177,7 +177,7 @@ def test_boldmoments_video_and_fmri_order_consistency(tmp_path):
             )  # Use batch_size >= number of videos
 
             # Check that the sample IDs are in the expected order
-            expected_sample_ids = [f"{i:04d}" for i in range(1001, 1006)]
+            expected_sample_ids = [f"{i:04d}" for i in range(1, 6)]
             assert fmri_sample_ids_retrieved == expected_sample_ids, (
                 f"FMRI sample IDs {fmri_sample_ids_retrieved}"
                 f"do not match expected {expected_sample_ids}"
@@ -228,3 +228,127 @@ def test_subject_id_parsing():
         f"subject ids: {dataset.subject_ids}; failed to parse single subject id "
         "in dataset creation"
     )
+
+
+def _build_ordering_dataset(tmp_path, monkeypatch, stored_ids, stored_data):
+    """Builds a BoldMoments dataset over 5 mock train stimuli.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+        monkeypatch: Pytest monkeypatch fixture.
+        stored_ids: Sample IDs to store in the mock fMRI pickle (e.g. "vid0001").
+        stored_data: fMRI betas to store, aligned with stored_ids.
+
+    Returns:
+        The constructed BoldMoments dataset.
+    """
+    import multitasking.datasets
+
+    video_path = tmp_path / "stimulus_set"
+    fmri_path = tmp_path / "fmri"
+    (video_path / "mp4_h264").mkdir(parents=True)
+    (fmri_path / "sub-01" / "prepared_betas").mkdir(parents=True)
+
+    for sample_id in [f"{i:04d}" for i in range(1, 6)]:
+        (video_path / "mp4_h264" / f"{sample_id}.mp4").touch()
+
+    betas_file = (
+        fmri_path
+        / "sub-01"
+        / "prepared_betas"
+        / "sub-01_organized_betas_task-train_normalized.pkl"
+    )
+    with open(betas_file, "wb") as f:
+        pickle.dump((stored_data, stored_ids), f)
+
+    class MockRoiMasks:
+        def __init__(self, rois):
+            self.rois = {roi: np.arange(20) for roi in rois}
+            self.roi_names = list(rois)
+
+        def extract_rois(self):
+            pass
+
+    monkeypatch.setattr(multitasking.datasets, "RoiMasks", MockRoiMasks)
+
+    return BoldMoments(
+        video_path=video_path,
+        fmri_path=fmri_path,
+        rois=["V1"],
+        split="train",
+        subject_ids=["sub-01"],
+    )
+
+
+def test_fmri_rows_are_reordered_to_video_order(tmp_path, monkeypatch):
+    # The pickle stores the samples in a shuffled order; each row carries its own
+    # sample ID as its value, so misalignment is detectable.
+    sample_ids = [f"{i:04d}" for i in range(1, 6)]
+    shuffled = [3, 0, 4, 1, 2]
+    stored_data = np.stack(
+        [np.full((10, 20), float(sample_ids[i])) for i in shuffled]
+    )
+    stored_ids = [f"vid{sample_ids[i]}" for i in shuffled]
+
+    ds = _build_ordering_dataset(tmp_path, monkeypatch, stored_ids, stored_data)
+
+    fmri_data, fmri_sample_ids = ds._load_fmri_per_subject(
+        "sub-01", return_sample_ids=True
+    )
+
+    assert ds.sample_ids == sample_ids
+    assert fmri_sample_ids == sample_ids
+    # Row i must still carry the signature of sample_ids[i] after reordering.
+    np.testing.assert_allclose(
+        fmri_data[:, 0], [float(sample_id) for sample_id in sample_ids]
+    )
+
+
+def test_missing_fmri_sample_raises(tmp_path, monkeypatch):
+    # The pickle is missing stimulus 0003 entirely.
+    present_ids = ["0001", "0002", "0004", "0005"]
+    stored_data = np.stack(
+        [np.full((10, 20), float(sample_id)) for sample_id in present_ids]
+    )
+    stored_ids = [f"vid{sample_id}" for sample_id in present_ids]
+
+    ds = _build_ordering_dataset(tmp_path, monkeypatch, stored_ids, stored_data)
+
+    with pytest.raises(ValueError, match="missing"):
+        ds._load_fmri_per_subject("sub-01")
+
+
+def test_split_is_derived_from_sample_id(tmp_path, monkeypatch):
+    # Stimulus 1001 belongs to the test split even though only 6 videos exist.
+    import multitasking.datasets
+
+    video_path = tmp_path / "stimulus_set"
+    fmri_path = tmp_path / "fmri"
+    (video_path / "mp4_h264").mkdir(parents=True)
+    (fmri_path / "sub-01").mkdir(parents=True)
+
+    for sample_id in ["0001", "0002", "0003", "1001", "1002", "1003"]:
+        (video_path / "mp4_h264" / f"{sample_id}.mp4").touch()
+
+    class MockRoiMasks:
+        def __init__(self, rois):
+            self.rois = {roi: np.arange(20) for roi in rois}
+            self.roi_names = list(rois)
+
+        def extract_rois(self):
+            pass
+
+    monkeypatch.setattr(multitasking.datasets, "RoiMasks", MockRoiMasks)
+
+    ds = BoldMoments(
+        video_path=video_path,
+        fmri_path=fmri_path,
+        rois=["V1"],
+        split="test",
+        subject_ids=["sub-01"],
+    )
+
+    assert ds.all_sample_ids_by_split["train"] == ["0001", "0002", "0003"]
+    assert ds.all_sample_ids_by_split["test"] == ["1001", "1002", "1003"]
+    # "1001" is on the invalid list for the test split.
+    assert ds.sample_ids == ["1002", "1003"]

@@ -38,7 +38,7 @@ def extract_model_representations(
     """
     if reuse and path.exists():
         LOGGER.warning("Reusing existing features from %s", path)
-        return FeatureBuffer(path)  # type: ignore
+        return FeatureBuffer(path, sample_ids=dataset.sample_ids)  # type: ignore
     elif path.exists():
         shutil.rmtree(path)
 
@@ -56,17 +56,41 @@ class FeatureBuffer:
     adds some convenience methods for appending and accessing the features.
     """
 
-    def __init__(self, path: Path, num_samples: int | None = None):
+    def __init__(
+        self,
+        path: Path,
+        num_samples: int | None = None,
+        sample_ids: Sequence[str] | None = None,
+    ):
         """Initializes the feature buffer.
 
         Parameters:
             path: The path to the directory in which to store the features. If this
                 directory does not exist, an empty buffer will be created.
             num_samples: The number of samples in the buffer. Can be omitted if loading
-                an existing buffer.
+                an existing buffer, or if sample_ids is provided.
+            sample_ids: The IDs of the samples, in the order in which they are
+                appended. When creating a buffer these are stored alongside the
+                features; when loading an existing buffer they are checked against
+                the stored IDs, so that cached features can never be paired with a
+                differently ordered dataset.
+
+        Raises:
+            ValueError: If num_samples and sample_ids disagree, or if an existing
+                buffer was extracted for different sample IDs.
         """
         self._path = path
         self._data = dict()
+        self._sample_ids = list(sample_ids) if sample_ids is not None else None
+
+        if self._sample_ids is not None:
+            if num_samples is None:
+                num_samples = len(self._sample_ids)
+            elif num_samples != len(self._sample_ids):
+                raise ValueError(
+                    f"Number of samples provided ({num_samples}) does not match the "
+                    f"number of sample IDs provided ({len(self._sample_ids)})."
+                )
 
         if self._path.exists():
             LOGGER.info("Loading existing feature buffer from %s", self._path)
@@ -91,6 +115,8 @@ class FeatureBuffer:
                     shape=tuple(shape),
                 )
 
+            self._verify_sample_ids()
+
             num_samples_in_path = len(self._data[next(iter(self._data))])
             if num_samples is not None and num_samples != num_samples_in_path:
                 raise ValueError(
@@ -107,6 +133,9 @@ class FeatureBuffer:
                     "Number of samples must be provided if creating a new buffer."
                 )
             self._path.mkdir(parents=True)
+            if self._sample_ids is not None:
+                with open(self._path / "sample_ids.json", "w") as f:
+                    json.dump(self._sample_ids, f)
 
             self._num_samples = num_samples
             self._next_index = 0
@@ -115,6 +144,55 @@ class FeatureBuffer:
     def num_samples(self) -> int:
         """Returns the number of samples."""
         return self._num_samples
+
+    @property
+    def sample_ids(self) -> list[str] | None:
+        """Returns the sample IDs the features were extracted for, if known."""
+        return self._sample_ids
+
+    def _verify_sample_ids(self) -> None:
+        """Checks the stored sample IDs against the ones provided by the caller.
+
+        Raises:
+            ValueError: If the buffer has no stored sample IDs although they were
+                requested, or if the stored IDs differ from the provided ones.
+        """
+        ids_path = self._path / "sample_ids.json"
+
+        if not ids_path.exists():
+            if self._sample_ids is None:
+                return
+            raise ValueError(
+                f"Feature buffer at {self._path} predates sample-ID tracking and "
+                "cannot be verified against the current dataset. Delete it or rerun "
+                "with --overwrite-cache to re-extract the features."
+            )
+
+        with open(ids_path, "r") as f:
+            stored_ids = json.load(f)
+
+        if self._sample_ids is None:
+            self._sample_ids = stored_ids
+            return
+
+        if stored_ids != self._sample_ids:
+            first_difference = next(
+                (
+                    index
+                    for index, (stored, expected) in enumerate(
+                        # Lengths may differ; that is part of what we report.
+                        zip(stored_ids, self._sample_ids, strict=False)
+                    )
+                    if stored != expected
+                ),
+                min(len(stored_ids), len(self._sample_ids)),
+            )
+            raise ValueError(
+                f"Cached features at {self._path} were extracted for a different "
+                f"sample set or order ({len(stored_ids)} samples) than the current "
+                f"dataset ({len(self._sample_ids)} samples); first difference at "
+                f"index {first_difference}."
+            )
 
     @property
     def num_layers(self) -> int:
@@ -334,11 +412,19 @@ class FeatureExtractor:
 
         self.model.eval()
 
-        buffer = FeatureBuffer(path, len(dataset))  # type: ignore
-        for index, (video, _) in tqdm(
+        expected_sample_ids = list(dataset.sample_ids)
+        seen_sample_ids: list[str] = []
+
+        buffer = FeatureBuffer(
+            path,
+            len(dataset),  # type: ignore
+            sample_ids=expected_sample_ids,
+        )
+        for index, (video, sample_ids) in tqdm(
             enumerate(dataset.load_videos(batch_size=self.batch_size)),
             total=np.ceil(len(dataset)/self.batch_size),
         ):
+            seen_sample_ids.extend(sample_ids)
             if index == 0:
                 LOGGER.info("Video shape: %s", video.shape)
             features = self.model.extract_video_features(video, self.layers)  # type: ignore  # noqa: E501
@@ -356,6 +442,13 @@ class FeatureExtractor:
                     LOGGER.info("- %s: %s", layer, feature.shape)
 
             buffer.append_batch(features)
+
+        if seen_sample_ids != expected_sample_ids:
+            raise ValueError(
+                "Videos were loaded in an order that does not match "
+                "dataset.sample_ids; the extracted features would be misaligned "
+                "with the fMRI data."
+            )
 
         buffer.validate()
 

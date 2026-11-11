@@ -1,0 +1,18 @@
+# Minimal end-to-end BOLD Moments config used by
+# tests/test_dataset.py::test_subject_id_parsing and
+# tests/test_voxel_consistency.py::test_integration_on_bold_moments_if_available.
+#
+# Both tests skip (or are expected to be skipped) when the dataset paths below
+# are not present on the machine.
+dataset:
+  name: bold_moments
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/stimuli/stimulus_set/
+  resolution: 256
+  frame_rate: 4
+
+fmri:
+  path: /mnt/lustre/work/bethge/mwe467/datasets/bold_moments/ds005165/derivatives/versionB/fsLR32k/GLM/
+  sub_id: sub-01
+  roi_names: ["V1", "V2", "V4", "MT"]
+  voxel_consistency_threshold: 0.3
+  apply_consistency_threshold: False

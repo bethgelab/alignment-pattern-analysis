@@ -12,11 +12,21 @@ import torch
 from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
+from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.fmri_data.roi_utils import RoiMasks
+from multitasking.fmri_data.voxel_consistency import (
+    get_roi_wise_voxel_consistency,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
+
+# BOLD Moments: stimuli 0001-1000 are the training set, 1001-1102 the test set.
+TRAIN_TEST_ID_BOUNDARY = 1000
+
+# Number of stimuli expected per split before invalid samples are removed.
+EXPECTED_SPLIT_SIZES = {"train": 1000, "test": 102}
 
 
 class FMRIObjaverse(Dataset):
@@ -99,8 +109,8 @@ class FMRIObjaverse(Dataset):
         return torch.from_numpy(video).movedim(-1, 0)
 
 
-class BoldMoments:
-    """Loads videos from the fMRI-Objaverse dataset."""
+class BoldMoments(FmriStimulusDataset):
+    """Loads videos and fMRI responses from the BOLD Moments dataset."""
 
     def __init__(
         self,
@@ -136,10 +146,36 @@ class BoldMoments:
             f.name.split(".")[0] for f in video_target_path.glob("*.mp4")
         ]
         self.all_sample_ids.sort()
+
+        non_numeric = [sid for sid in self.all_sample_ids if not sid.isdigit()]
+        if non_numeric:
+            raise ValueError(
+                f"Expected purely numeric stimulus IDs, got e.g. {non_numeric[:10]}"
+            )
+
+        # Derive the split from the stimulus ID rather than from the position in the
+        # globbed file list, so that a missing or additional .mp4 cannot shift samples
+        # across the train/test boundary (the fMRI data is split by ID, too).
         self.all_sample_ids_by_split = {
-            "train": self.all_sample_ids[:1000],
-            "test": self.all_sample_ids[1000:],
+            "train": [
+                sid
+                for sid in self.all_sample_ids
+                if int(sid) <= TRAIN_TEST_ID_BOUNDARY
+            ],
+            "test": [
+                sid for sid in self.all_sample_ids if int(sid) > TRAIN_TEST_ID_BOUNDARY
+            ],
         }
+        for split_name, expected_count in EXPECTED_SPLIT_SIZES.items():
+            found_count = len(self.all_sample_ids_by_split[split_name])
+            if found_count != expected_count:
+                LOGGER.warning(
+                    "Found %d %s stimuli in %s, expected %d",
+                    found_count,
+                    split_name,
+                    video_target_path,
+                    expected_count,
+                )
         self.invalid_sample_ids = {
             "train": ["0258", "0831"],
             "test": ["1001", "1097", "1090", "1085", "1094", "1093"],
@@ -200,6 +236,15 @@ class BoldMoments:
         """Returns the number of samples in the dataset."""
         return len(self.videos[self.split])
 
+    @property
+    def sample_ids(self) -> list[str]:
+        """Sample IDs of the current split, in the order everything is loaded in.
+
+        This is the single source of truth for sample ordering: videos, fMRI rows
+        and cached model features all follow this list.
+        """
+        return self.valid_sample_ids[self.split]
+
     def __getitem__(self, index: int) -> dict[str, str | torch.Tensor]:
         """This function is ambiguous, hence not used.
 
@@ -242,6 +287,19 @@ class BoldMoments:
                 self._load_fmri_per_subject(sub, return_sample_ids=False)
             )
         return fmri_data
+
+    def load_voxel_consistency(self, subject_id: str) -> dict[str, np.ndarray]:
+        """Loads a subject's per-ROI noise ceiling SNR.
+
+        Args:
+            subject_id: The subject whose reliability values to load.
+
+        Returns:
+            A dictionary mapping ROI names to per-voxel noise ceiling SNR.
+        """
+        return get_roi_wise_voxel_consistency(
+            {"path": str(self.fmri_path)}, self.roi_masks, subject_id
+        )
 
     def load_videos(self, batch_size=1) ->  \
         Iterator[tuple[torch.Tensor, list[str]]]:
@@ -308,45 +366,67 @@ class BoldMoments:
         else:
             return clean_fmri_data
 
-    def _clean_samples(self, fmri_data: NDArray[np.float64], sample_ids: list[str]):
-        """Selects all valid fMRI data points within the current split.
+    def _clean_samples(
+        self, fmri_data: NDArray[np.float64], sample_ids: list[str]
+    ) -> tuple[NDArray[np.float64], list[str]]:
+        """Selects and reorders the valid fMRI data points of the current split.
 
         An fMRI data point is a [1, n_reps, n_voxels] entry in a Numpy Array.
         Valid data points are all data points that are not specified invalid
         in the BOLDMoment's __init__ function.
 
+        Rows are returned in the order of ``self.sample_ids``, i.e. row ``i``
+        always corresponds to ``self.videos[self.split][i]``, regardless of the
+        order the samples happen to be stored in on disk.
+
         Args:
             fmri_data (NDArray[np.float64]): The fMRI data array, where each
                 entry is a data point
             sample_ids (list[str]): List of sample IDs corresponding to the fMRI
-                data points
+                data points, formatted like "vid0001".
 
         Returns:
             Tuple[NDArray[np.float64], list[str]]:
-                - The cleaned fMRI data array containing only valid samples.
-                - The list of cleaned sample IDs corresponding to the valid
-                    samples.
+                - The cleaned and reordered fMRI data array.
+                - The list of cleaned sample IDs, equal to ``self.sample_ids``.
 
         Raises:
-            AssertionError: If the cleaned sample IDs do not match the expected
-                valid sample IDs for the current split.
+            ValueError: If the number of sample IDs does not match the number of
+                data points, if a sample ID occurs more than once, or if an
+                expected sample is missing from the fMRI data.
         """
-        clean_fmri_data, clean_sample_ids = map(
-            list,
-            zip(
-                *(
-                    (data_point, sid[3:])
-                    for data_point, sid in zip(fmri_data, sample_ids, strict=True)
-                    if sid[3:]  # IDs look like "vid0001"
-                    in self.valid_sample_ids[self.split]
-                ),
-                strict=True,
-            ),
-        )
-        assert self.valid_sample_ids[self.split] == clean_sample_ids, (
-            "fMRI samples don't match valid_samples!"
-        )
-        return np.asarray(clean_fmri_data), clean_sample_ids
+        if len(fmri_data) != len(sample_ids):
+            raise ValueError(
+                f"fMRI data has {len(fmri_data)} rows but {len(sample_ids)} "
+                "sample IDs were provided."
+            )
+
+        index_by_id: dict[str, int] = {}
+        for index, sid in enumerate(sample_ids):
+            stripped = sid[3:]  # IDs look like "vid0001"
+            if stripped in index_by_id:
+                raise ValueError(f"Duplicate sample ID {sid!r} in fMRI data.")
+            index_by_id[stripped] = index
+
+        expected_ids = list(self.sample_ids)
+        missing = [sid for sid in expected_ids if sid not in index_by_id]
+        if missing:
+            raise ValueError(
+                f"fMRI data for split {self.split!r} is missing "
+                f"{len(missing)} expected sample(s), e.g. {missing[:10]}"
+            )
+
+        n_dropped = len(index_by_id) - len(expected_ids)
+        if n_dropped:
+            LOGGER.info(
+                "Dropping %d fMRI sample(s) not in the %s split.",
+                n_dropped,
+                self.split,
+            )
+
+        # Reorder (not just filter), so that the fMRI rows line up with the videos.
+        order = [index_by_id[sid] for sid in expected_ids]
+        return np.asarray(fmri_data)[order], expected_ids
 
     def _reformat_data_roi_wise(self, fmri_data: NDArray[np.float64]):
         """Reformats the fMRI data array to be ROI-wise.
