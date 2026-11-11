@@ -17,7 +17,8 @@ def rng() -> np.random.Generator:
 
 def test_compute_rdm_torch_matches_scipy_implementation(rng: np.random.Generator):
     x = rng.normal(size=(1000, 100))
-    x_torch = torch.from_numpy(x).to(device="cuda")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    x_torch = torch.from_numpy(x).to(device=device)
 
     rdm_pytorch = _compute_rdm_torch(x_torch, chunk_size=100).cpu().numpy()
     rdm_scipy = _compute_rdm_scipy(x)

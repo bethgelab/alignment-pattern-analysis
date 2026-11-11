@@ -3,7 +3,10 @@
 import pytest
 import torch
 
-from multitasking.models import vggt
+# VGGT is an optional dependency, so skip the whole module when it is missing.
+pytest.importorskip("vggt")
+
+from multitasking.models import vggt  # noqa: E402
 
 
 @pytest.mark.parametrize("model_name", vggt.list_models())
