@@ -19,7 +19,7 @@ import logging
 import os
 from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 import torch
@@ -30,9 +30,14 @@ from multitasking.CONSTANTS import NSD_SUBJECTS
 from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.fmri_data.noise_ceiling import load_nsd_ncsnr
 from multitasking.fmri_data.roi_utils import build_roi_masks
-from multitasking.nsd.prepare_roi_betas import cache_path
+from multitasking.nsd.prepare_roi_betas import (
+    NSD_CACHE_DIRNAME,
+    NSD_STIMULUS_SET,
+    cache_path,
+)
 from multitasking.nsd.splits import format_sample_id, split_sample_ids
 from multitasking.nsd.trial_counts import (
+    NSD_SHARED1000_SIZE,
     load_shared1000_trial_counts,
     valid_stimulus_ids,
 )
@@ -45,7 +50,37 @@ STIMULUS_IMAGES_DIRNAME = "images"
 
 
 class NSD(FmriStimulusDataset):
-    """Loads NSD stimuli and fMRI responses for one split."""
+    """Loads NSD stimuli and fMRI responses for one split.
+
+    The handful of class variables below are the seams a parallel stimulus set
+    varies. :class:`multitasking.datasets_nsd_synthetic.NSDSynthetic` shares
+    this class's surface space, subjects, atlas, cache format and imputation,
+    and differs only in which stimuli exist and where their artifacts live.
+    """
+
+    #: Directory component under the beta-cache root. Must be used both when
+    #: building the exact path and when globbing for a superset cache, or a
+    #: subclass's superset lookup would reach into this one's caches.
+    CACHE_DIRNAME: ClassVar[str] = NSD_CACHE_DIRNAME
+
+    #: Stimulus set a loaded cache must declare.
+    STIMULUS_SET: ClassVar[str] = NSD_STIMULUS_SET
+
+    #: Rows a cache for this stimulus set must hold.
+    N_STIMULI: ClassVar[int] = NSD_SHARED1000_SIZE
+
+    #: Told to the caller when a stimulus image is missing.
+    PREPARE_STIMULI_HINT: ClassVar[str] = (
+        "Reconstruct the stimuli with "
+        "`python -m multitasking.nsd.prepare_stimuli`."
+    )
+
+    #: Told to the caller when a beta cache is missing. Formatted with
+    #: ``fmri_path`` and ``roi_beta_cache``.
+    PREPARE_BETAS_HINT: ClassVar[str] = (
+        "Build it with `python -m multitasking.nsd.prepare_roi_betas "
+        "--fmri-path {fmri_path} --output-dir {roi_beta_cache}`."
+    )
 
     def __init__(
         self,
@@ -140,18 +175,10 @@ class NSD(FmriStimulusDataset):
         )
         self.roi_masks.extract_rois()
 
-        self._trial_counts = load_shared1000_trial_counts()
-        usable = valid_stimulus_ids(
-            self.stimulus_subject_ids, min_n_trials, self._trial_counts
-        )
-        self._stimulus_ids = split_sample_ids(split, usable, train_fraction)
-        if not self._stimulus_ids:
-            raise ValueError(
-                f"The {split} split is empty for subjects "
-                f"{self.stimulus_subject_ids} at min_n_trials={min_n_trials}."
-            )
+        self._stimulus_ids = self._select_stimulus_ids(split)
         self._sample_ids = [
-            format_sample_id(stimulus_id) for stimulus_id in self._stimulus_ids
+            self.format_sample_id(stimulus_id)
+            for stimulus_id in self._stimulus_ids
         ]
 
         if isinstance(resolution, int):
@@ -163,16 +190,80 @@ class NSD(FmriStimulusDataset):
         else:
             self.resolution = None
 
+    @staticmethod
+    def format_sample_id(stimulus_id: int) -> str:
+        """Formats a stimulus ID the way this dataset keys its samples.
+
+        Args:
+            stimulus_id: The 1-based stimulus ID.
+
+        Returns:
+            The sample ID string.
+        """
+        return format_sample_id(stimulus_id)
+
+    def _select_stimulus_ids(self, split: str) -> list[int]:
+        """Returns this split's stimulus IDs, and fixes the sample ordering.
+
+        Splits the shared-1000 deterministically on the stimulus ID and only
+        then intersects with what the stimulus subjects actually saw, so a
+        stimulus can never change split when the subject set changes.
+
+        Args:
+            split: "train" or "test".
+
+        Returns:
+            Sorted, ascending stimulus IDs.
+
+        Raises:
+            ValueError: If the split ends up empty.
+        """
+        self._trial_counts = load_shared1000_trial_counts()
+        usable = valid_stimulus_ids(
+            self.stimulus_subject_ids, self.min_n_trials, self._trial_counts
+        )
+        stimulus_ids = split_sample_ids(split, usable, self.train_fraction)
+        if not stimulus_ids:
+            raise ValueError(
+                f"The {split} split is empty for subjects "
+                f"{self.stimulus_subject_ids} at "
+                f"min_n_trials={self.min_n_trials}."
+            )
+
         LOGGER.info(
             "NSD %s split: %d of %d shared stimuli (%d subjects define the "
             "stimulus set, min_n_trials=%d, train_fraction=%.2f)",
             split,
-            len(self._stimulus_ids),
+            len(stimulus_ids),
             len(usable),
             len(self.stimulus_subject_ids),
-            min_n_trials,
-            train_fraction,
+            self.min_n_trials,
+            self.train_fraction,
         )
+        return stimulus_ids
+
+    def _expected_trial_counts(
+        self, subject_id: str, max_reps: int | None = None
+    ) -> NDArray[np.uint8]:
+        """Returns this split's repetition counts, derived from the design.
+
+        Independent of the betas, which is the point: comparing it against the
+        counts the cache recorded validates the derivation that fixed
+        ``sample_ids`` against the data actually loaded.
+
+        Args:
+            subject_id: The subject to look up.
+            max_reps: A cap the cache declares on how many repetitions it
+                averaged. NSD-core caches never set one - they average whatever
+                a subject saw - so this is ignored here and honoured by
+                subclasses whose preparation step offers the option.
+
+        Returns:
+            One count per sample, in :attr:`sample_ids` order.
+        """
+        del max_reps  # NSD-core averages every available repetition.
+        rows = np.asarray(self._stimulus_ids) - 1
+        return self._trial_counts[subject_id][rows]
 
     def __len__(self) -> int:
         """Returns the number of samples in this split."""
@@ -185,7 +276,7 @@ class NSD(FmriStimulusDataset):
 
     @property
     def stimulus_ids(self) -> list[int]:
-        """Returns this split's stimulus IDs as integers in ``1..1000``."""
+        """Returns this split's stimulus IDs as integers in ``1..N_STIMULI``."""
         return self._stimulus_ids
 
     def _image_path(self, sample_id: str) -> Path:
@@ -209,8 +300,7 @@ class NSD(FmriStimulusDataset):
         """
         if not path.exists():
             raise FileNotFoundError(
-                f"NSD stimulus not found at {path}. Reconstruct the stimuli with "
-                "`python -m multitasking.nsd.prepare_stimuli`."
+                f"Stimulus not found at {path}. {self.PREPARE_STIMULI_HINT}"
             )
 
         with Image.open(path) as source:
@@ -264,6 +354,7 @@ class NSD(FmriStimulusDataset):
             list(self.roi_masks.roi_names),
             self.surface_space,
             self.subsample_stride,
+            dirname=self.CACHE_DIRNAME,
         )
         if exact.exists():
             return exact
@@ -271,7 +362,7 @@ class NSD(FmriStimulusDataset):
         needed = set(self.roi_masks.roi_names)
         search_root = (
             self.roi_beta_cache
-            / "nsd_roi_betas"
+            / self.CACHE_DIRNAME
             / self.surface_space
             / f"stride{self.subsample_stride}"
         )
@@ -309,9 +400,11 @@ class NSD(FmriStimulusDataset):
         path = self._cache_path(subject_id)
         if not path.exists():
             raise FileNotFoundError(
-                f"NSD ROI beta cache not found at {path}. Build it with "
-                "`python -m multitasking.nsd.prepare_roi_betas --fmri-path "
-                f"{self.fmri_path} --output-dir {self.roi_beta_cache}`."
+                f"ROI beta cache not found at {path}. "
+                + self.PREPARE_BETAS_HINT.format(
+                    fmri_path=self.fmri_path,
+                    roi_beta_cache=self.roi_beta_cache,
+                )
             )
 
         with np.load(path, allow_pickle=False) as cached:
@@ -320,6 +413,16 @@ class NSD(FmriStimulusDataset):
             stimulus_ids = cached["stimulus_ids"]
             cached_rois = [str(name) for name in cached["roi_names"]]
             cached_counts = cached["roi_vertex_counts"]
+            # Caches written before the tag existed all hold NSD-core stimuli.
+            cached_stimulus_set = (
+                str(cached["stimulus_set"])
+                if "stimulus_set" in cached
+                else NSD_STIMULUS_SET
+            )
+            # -1 and absence both mean "every available repetition".
+            cached_max_reps = (
+                int(cached["max_reps"]) if "max_reps" in cached else -1
+            )
 
         missing_rois = [
             roi for roi in self.roi_masks.roi_names if roi not in cached_rois
@@ -359,16 +462,34 @@ class NSD(FmriStimulusDataset):
             axis=1,
         )
 
+        # Identity first. The superset lookup above can land on a cache built
+        # for a different stimulus set entirely - one that is internally
+        # well-ordered and would pass every check below while holding the wrong
+        # brain responses.
+        if cached_stimulus_set != self.STIMULUS_SET:
+            raise ValueError(
+                f"Cached betas at {path} hold the {cached_stimulus_set!r} "
+                f"stimulus set, but this dataset scores {self.STIMULUS_SET!r}."
+            )
+        if len(stimulus_ids) != self.N_STIMULI:
+            raise ValueError(
+                f"Cached betas at {path} hold {len(stimulus_ids)} stimuli, but "
+                f"{self.STIMULUS_SET!r} has {self.N_STIMULI}."
+            )
+
         expected_ids = np.arange(1, len(stimulus_ids) + 1)
         if not np.array_equal(stimulus_ids, expected_ids):
             raise ValueError(
-                f"Cached betas at {path} are not in shared-1000 stimulus order."
+                f"Cached betas at {path} are not in contiguous "
+                f"1..{self.N_STIMULI} stimulus order."
             )
 
         # stimulus id k lives at row k - 1.
         rows = np.asarray(self._stimulus_ids) - 1
 
-        design_counts = self._trial_counts[subject_id][rows]
+        design_counts = self._expected_trial_counts(
+            subject_id, max_reps=None if cached_max_reps < 0 else cached_max_reps
+        )
         actual_counts = trial_counts[rows]
         if not np.array_equal(design_counts, actual_counts):
             n_differing = int((design_counts != actual_counts).sum())
