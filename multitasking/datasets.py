@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import pickle
@@ -27,6 +28,29 @@ TRAIN_TEST_ID_BOUNDARY = 1000
 
 # Number of stimuli expected per split before invalid samples are removed.
 EXPECTED_SPLIT_SIZES = {"train": 1000, "test": 102}
+
+# Config key holding a per-split override, used to score a model on one dataset
+# after fitting it on another - NSD-core train against NSD-synthetic test.
+TEST_SPLIT_CONFIG_KEY = "test_split"
+
+# What that override may change, and nothing else. The rest of the pipeline
+# reads several settings from the train dataset or from the base config and
+# applies them to both splits: `subject_ids` comes from the train dataset
+# (benchmark.py), `roi_names` from the base config, and the voxel-consistency
+# mask is built once from the train dataset's NCSNR as a positional vector in
+# ROI-vertex order. Overriding any of those would de-synchronise the two splits,
+# in some cases silently, so only the keys that locate a dataset's own files may
+# vary.
+TEST_SPLIT_OVERRIDABLE_KEYS = frozenset(
+    {
+        "dataset.name",
+        "dataset.path",
+        "fmri.path",
+        "fmri.roi_beta_cache",
+        "fmri.ncsnr_source",
+        "fmri.nsd_core_path",
+    }
+)
 
 
 class FMRIObjaverse(Dataset):
@@ -349,9 +373,8 @@ class BoldMoments(FmriStimulusDataset):
         """
         with open(
             self.fmri_path
-            / f"{subject_id}/prepared_betas/{subject_id}_organized_betas_task-{
-                self.split
-            }_normalized.pkl",
+            / f"{subject_id}/prepared_betas/"
+            f"{subject_id}_organized_betas_task-{self.split}_normalized.pkl",
             "rb",
         ) as f:
             fmri_data, sample_ids = pickle.load(f)
@@ -486,10 +509,73 @@ class BoldMoments(FmriStimulusDataset):
         return torch.from_numpy(video).movedim(-1, 0)
 
 
+def merge_test_split_override(
+    config: dict[str, Any], override: dict[str, Any]
+) -> dict[str, Any]:
+    """Applies a ``test_split`` override onto the ``dataset`` and ``fmri`` keys.
+
+    Returns a new config; the caller's is never mutated, because everything
+    ``benchmark.py`` reads after building the datasets - the ROI list, the
+    voxel-consistency settings, the model name in the scoresheets - would
+    otherwise silently flip to the override.
+
+    Args:
+        config: The full configuration dictionary.
+        override: The ``test_split`` subtree, holding ``dataset`` and/or
+            ``fmri`` keys.
+
+    Returns:
+        A new configuration dictionary with the override applied.
+
+    Raises:
+        ValueError: If the override touches a section or key that the two
+            splits must agree on; see :data:`TEST_SPLIT_OVERRIDABLE_KEYS`.
+    """
+    sections = ("dataset", "fmri")
+    unknown_sections = sorted(set(override) - set(sections))
+    if unknown_sections:
+        raise ValueError(
+            f"{TEST_SPLIT_CONFIG_KEY} may only hold {list(sections)}, got "
+            f"{unknown_sections}."
+        )
+
+    offending: list[str] = []
+    for section in sections:
+        entries = override.get(section) or {}
+        if not isinstance(entries, dict):
+            raise ValueError(
+                f"{TEST_SPLIT_CONFIG_KEY}.{section} must be a mapping, got "
+                f"{type(entries).__name__}."
+            )
+        offending.extend(
+            f"{section}.{key}"
+            for key in entries
+            if f"{section}.{key}" not in TEST_SPLIT_OVERRIDABLE_KEYS
+        )
+    if offending:
+        raise ValueError(
+            f"{TEST_SPLIT_CONFIG_KEY} cannot override {sorted(offending)}. The "
+            "train and test splits must agree on everything except where a "
+            f"dataset's own files live; overridable keys are "
+            f"{sorted(TEST_SPLIT_OVERRIDABLE_KEYS)}."
+        )
+
+    merged = copy.deepcopy(dict(config))
+    for section in sections:
+        entries = override.get(section) or {}
+        if entries:
+            merged[section] = {**dict(merged.get(section, {})), **dict(entries)}
+    return merged
+
+
 def build_dataset(
     config: dict[str, Any], split: Literal["train", "test"]
 ) -> FmriStimulusDataset:
     """Builds a dataset from a config.
+
+    When the config carries a ``test_split`` subtree, the test split is built
+    from a different dataset than the train split. That is how a model is
+    fitted on NSD-core and scored on NSD-synthetic.
 
     Args:
         config: The full configuration dictionary.
@@ -500,8 +586,17 @@ def build_dataset(
 
     Raises:
         NotImplementedError: For the retired fMRI-Objaverse dataset.
-        ValueError: For an unknown dataset name.
+        ValueError: For an unknown dataset name, or an illegal override.
     """
+    override = config.get(TEST_SPLIT_CONFIG_KEY)
+    if split == "test" and override:
+        config = merge_test_split_override(config, override)
+        LOGGER.info(
+            "Building the test split from %r rather than %r.",
+            config["dataset"].get("name"),
+            dict(config).get("dataset", {}).get("name"),
+        )
+
     dataset_name = config["dataset"].get("name")
 
     if dataset_name == "bold_moments":
@@ -547,6 +642,35 @@ def build_dataset(
             roi_beta_cache=config["fmri"].get("roi_beta_cache"),
             resolution=config["dataset"].get("resolution", None),
             roi_groups=config["fmri"].get("roi_groups"),
+        )
+
+    elif dataset_name == "nsd_synthetic":
+        # Imported lazily, as for NSD.
+        from multitasking.datasets_nsd_synthetic import NSDSynthetic
+
+        if "frame_rate" in config["dataset"]:
+            raise ValueError(
+                "dataset.frame_rate is meaningless for NSD-synthetic, which "
+                "has still images. Remove it from the config."
+            )
+
+        subject_ids = config["fmri"].get("sub_id", "all")
+        if type(subject_ids) is str and subject_ids != "all":
+            subject_ids = [subject_ids]
+        return NSDSynthetic(
+            stimulus_path=config["dataset"]["path"],
+            fmri_path=config["fmri"]["path"],
+            rois=config["fmri"]["roi_names"],
+            split=split,
+            subject_ids=subject_ids,
+            surface_space=config["dataset"].get("surface_space", "fsaverage"),
+            atlas_dir=config["fmri"].get("atlas_dir"),
+            subsample_stride=config["fmri"].get("subsample_stride", 6),
+            roi_beta_cache=config["fmri"].get("roi_beta_cache"),
+            resolution=config["dataset"].get("resolution", None),
+            roi_groups=config["fmri"].get("roi_groups"),
+            ncsnr_source=config["fmri"].get("ncsnr_source", "nsd_synthetic"),
+            nsd_core_fmri_path=config["fmri"].get("nsd_core_path"),
         )
 
     elif dataset_name == "fmri_objaverse":

@@ -21,7 +21,10 @@ from multitasking.analyses.alignment_patterns.base import (
     SIMILARITY_METRICS,
     aggregation_pickle,
 )
-from multitasking.analyses.dataframe_utils import get_order
+from multitasking.analyses.dataframe_utils import (
+    align_order_to_available,
+    get_order,
+)
 from multitasking.CONSTANTS import get_rois, parse_roi_names
 from multitasking.plot_creation.plot_utils import save_this, set_ticks_0_1
 
@@ -61,10 +64,25 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--dataset",
-    type=click.Choice(["bold_moments", "nsd"]),
+    type=click.Choice(["bold_moments", "nsd", "nsd_synthetic"]),
     default="bold_moments",
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
+)
+@click.option(
+    "--model-order-from",
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, path_type=Path),
+    default=None,
+    help=(
+        "Rank the models on another aggregation instead of this one, so two "
+        "datasets can be plotted on a shared x-axis. Either the $SCRATCH "
+        "directory that aggregate_results wrote, or the "
+        "subject_avg_df_equiv_score_norm_lower_aps-<metric>.pkl inside it; a "
+        "directory is read with --aps-similarity-metric. Models absent "
+        "from the current results are dropped from the axis, with a warning; "
+        "the relative order of the rest is untouched. Defaults to ranking on "
+        "this dataset's own pickles."
+    ),
 )
 @click.option(
     "--exclude-rois",
@@ -88,7 +106,7 @@ logger = logging.getLogger(__name__)
     ),
 )
 def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
-         exclude_rois, aps_similarity_metric):
+         model_order_from, exclude_rois, aps_similarity_metric):
     rois = get_rois(dataset, exclude=parse_roi_names(exclude_rois))
     scratch = Path(os.environ.get("SCRATCH", "/scratch"))
     script_dir = Path(__file__).resolve().parent
@@ -99,15 +117,15 @@ def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
         plot_path = project_root / "results" / "boldmoments" / "plots" / date_str
     plot_path.mkdir(parents=True, exist_ok=True)
 
-    # Load data
-    subject_avg_df_model_order = pickle.load(
-        open(
-            aggregation_pickle(
-                scratch, "subject_avg_df_equiv_score_norm_lower", aps_similarity_metric
-            ),
-            "rb",
+    # Load data. The ordering may come from another dataset's aggregation,
+    # which is what lets two datasets be read off a shared x-axis.
+    order_source = model_order_from if model_order_from is not None else scratch
+    if order_source.is_dir():
+        order_source = aggregation_pickle(
+            order_source, "subject_avg_df_equiv_score_norm_lower", aps_similarity_metric
         )
-    )
+    logger.info(f"Ranking models on {order_source}")
+    subject_avg_df_model_order = pickle.load(open(order_source, "rb"))
     subject_avg_df_model_order["model_provider"] = subject_avg_df_model_order["model"].str.split("/").str[0]
     subject_avg_df_model_order = subject_avg_df_model_order[
         (subject_avg_df_model_order["split"] == split)
@@ -164,6 +182,9 @@ def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
     else:
         panel_1_df = panel_1_df_wo_taskonomy
 
+    model_order = align_order_to_available(
+        model_order, set(panel_1_df["model"].unique()), str(order_source)
+    )
 
     panel_1_df = (
         panel_1_df.set_index("model")
@@ -262,7 +283,16 @@ def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
     if "norm" in main_outcome:
         set_ticks_0_1(ax, axis="y", step= 0.4)
     else:
-        set_ticks_0_1(ax, axis="y", step= 0.2)
+        # Raw scores can be negative - linear predictivity under a
+        # distribution shift routinely is - and the default ticks start at 0,
+        # which leaves the negative half of the axis unlabelled and the zero
+        # line invisible. No effect where every bar is positive, which is the
+        # case for every normalized panel and for NSD-core and BOLD Moments.
+        y_bottom = ax.get_ylim()[0]
+        start = min(0.0, np.floor(y_bottom / 0.2) * 0.2)
+        if y_bottom < 0:
+            ax.axhline(y=0, color="black", linewidth=0.5)
+        set_ticks_0_1(ax, axis="y", start=start, step= 0.2)
     sns.despine(ax=ax)
 
     save_this(
