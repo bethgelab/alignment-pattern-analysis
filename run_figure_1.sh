@@ -6,13 +6,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
+# Which dataset's canonical ROI/subject lists to use: bold_moments
+# (default), nsd, or nsd_synthetic.
 DATASET="${DATASET:-bold_moments}"
 
 # ROIs to drop entirely, comma-separated (e.g. "V6,V6A"). An alignment pattern
 # is a vector over the retained ROIs, so this must match across the
 # aggregation and every figure built from it.
-EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
+# V6 and V6A are dropped by default: pass EXCLUDE_ROIS= to keep them.
+EXCLUDE_ROIS="${EXCLUDE_ROIS-V6,V6A}"
 
 # Where to write the figures. Empty means the script's own default,
 # results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
@@ -32,24 +34,33 @@ print(' '.join(get_rois('$DATASET', exclude=parse_roi_names('$EXCLUDE_ROIS'))))
 # Metrics: rsa, linear_predictivity
 METRICS="rsa linear_predictivity"
 
+# Whether to draw the taskonomy models' alignment patterns. Space-separated,
+# so TASKONOMY="True False" writes both variants of every figure (the file
+# name carries the value, so they do not overwrite each other).
+TASKONOMY="${TASKONOMY:-True}"
+
 # Main outcomes: score, score_norm_upper, score_norm_lower
 MAIN_OUTCOMES="score_norm_lower"
 
 echo "ROIs: $ROIS"
 echo "Metrics: $METRICS"
 echo "Main outcomes: $MAIN_OUTCOMES"
+echo "Taskonomy: $TASKONOMY"
 echo ""
 
 for metric in $METRICS; do
     for main_outcome in $MAIN_OUTCOMES; do
         for roi in $ROIS; do
-            echo "Running: metric=$metric main_outcome=$main_outcome roi=$roi"
-            python -m multitasking.plotting_scripts.figure_1 \
-                --dataset "$DATASET" \
-                --metric "$metric" \
-                --main-outcome "$main_outcome" \
-                --roi "$roi" "${PLOT_ARGS[@]}" \
-                --exclude-rois "$EXCLUDE_ROIS"
+            for taskonomy in $TASKONOMY; do
+                echo "Running: metric=$metric main_outcome=$main_outcome roi=$roi taskonomy=$taskonomy"
+                python -m multitasking.plotting_scripts.figure_1 \
+                    --dataset "$DATASET" \
+                    --metric "$metric" \
+                    --main-outcome "$main_outcome" \
+                    --roi "$roi" \
+                    --taskonomy "$taskonomy" "${PLOT_ARGS[@]}" \
+                    --exclude-rois "$EXCLUDE_ROIS"
+            done
         done
     done
 done
