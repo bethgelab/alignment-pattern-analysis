@@ -5,11 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --time=0-08:00
 #
-# The directives above are portable defaults. Nothing here names a cluster:
-# the partition, the account and any other site-specific sbatch flags are read
-# from the environment by launch.py and passed on the sbatch command line,
-# which overrides the matching directive above. sbatch parses these lines as
-# comments before any shell runs, so they cannot expand variables themselves.
+# The directives above are portable defaults.
 # See "Cluster configuration" in the README for the variables involved.
 
 set -euo pipefail

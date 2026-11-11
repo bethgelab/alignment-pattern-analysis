@@ -9,12 +9,6 @@
 # asks for no GPU and runs singularity without --nv. Point it at a CPU
 # partition (see "Cluster configuration" in the README) and it stops idling on
 # a GPU and queueing behind the model benchmark for one.
-#
-# The directives above are portable defaults. Nothing here names a cluster:
-# the partition, the account and any other site-specific sbatch flags are read
-# from the environment by launch.py and passed on the sbatch command line,
-# which overrides the matching directive above. sbatch parses these lines as
-# comments before any shell runs, so they cannot expand variables themselves.
 
 set -euo pipefail
 
