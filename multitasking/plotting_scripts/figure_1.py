@@ -19,6 +19,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+from multitasking.analyses.alignment_patterns.base import (
+    SIMILARITY_METRICS,
+    aggregation_pickle,
+)
 from multitasking.analyses.dataframe_utils import get_order
 from multitasking.CONSTANTS import get_rois, get_subjects, parse_roi_names
 from multitasking.plot_creation import cmap_colors
@@ -84,7 +88,19 @@ logger = logging.getLogger(__name__)
         "patterns in the pickles are vectors over the retained ROIs."
     ),
 )
-def main(dataset, metric, roi, main_outcome, split, plot_path, exclude_rois):
+@click.option(
+    "--aps-similarity-metric",
+    type=click.Choice(list(SIMILARITY_METRICS)),
+    default="pearson",
+    show_default=True,
+    help=(
+        "Alignment-pattern similarity metric aggregate_results was run with. "
+        "It is part of every pickle name, so this selects which aggregation "
+        "in $SCRATCH to read."
+    ),
+)
+def main(dataset, metric, roi, main_outcome, split, plot_path, exclude_rois,
+         aps_similarity_metric):
     rois = get_rois(dataset, exclude=parse_roi_names(exclude_rois))
     subjects = get_subjects(dataset)
     date_str = datetime.now().strftime("%Y%m%d")
@@ -98,10 +114,20 @@ def main(dataset, metric, roi, main_outcome, split, plot_path, exclude_rois):
 
     # Load data
     subject_avg_df = pickle.load(
-        open(scratch / f"subject_avg_df_equiv_{main_outcome}.pkl", "rb")
+        open(
+            aggregation_pickle(
+                scratch, f"subject_avg_df_equiv_{main_outcome}", aps_similarity_metric
+            ),
+            "rb",
+        )
     )
     pairwise_subject_df = pickle.load(
-        open(scratch / "pairwise_subject_df.pkl", "rb")
+        open(
+            aggregation_pickle(
+                scratch, "pairwise_subject_df", aps_similarity_metric
+            ),
+            "rb",
+        )
     )
 
     subject_avg_df["model_provider"] = subject_avg_df["model"].str.split("/").str[0]
@@ -145,15 +171,17 @@ def main(dataset, metric, roi, main_outcome, split, plot_path, exclude_rois):
     # Load alignment patterns
     model_brain_ap = pickle.load(
         open(
-            scratch
-            / f"model_brain_alignment_patterns_{metric}_{main_outcome}.pkl",
+            aggregation_pickle(
+                scratch, f"model_brain_alignment_patterns_{metric}_{main_outcome}", aps_similarity_metric
+            ),
             "rb",
         )
     )
     brain_brain_ap = pickle.load(
         open(
-            scratch
-            / f"pw_brain_brain_alignment_patterns_{metric}_{main_outcome}.pkl",
+            aggregation_pickle(
+                scratch, f"pw_brain_brain_alignment_patterns_{metric}_{main_outcome}", aps_similarity_metric
+            ),
             "rb",
         )
     )

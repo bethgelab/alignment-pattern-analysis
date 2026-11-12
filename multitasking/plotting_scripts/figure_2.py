@@ -20,6 +20,10 @@ import pandas as pd
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 
+from multitasking.analyses.alignment_patterns.base import (
+    SIMILARITY_METRICS,
+    aggregation_pickle,
+)
 from multitasking.CONSTANTS import get_rois, parse_roi_names
 from multitasking.plot_creation.plot_utils import save_this
 
@@ -83,8 +87,19 @@ DEFAULT_MODEL_ATTRIBUTES_PATH = PROJECT_ROOT / "model_attributes.ods"
           "modality and supervision rows and the column ordering."),
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
+@click.option(
+    "--aps-similarity-metric",
+    type=click.Choice(list(SIMILARITY_METRICS)),
+    default="pearson",
+    show_default=True,
+    help=(
+        "Alignment-pattern similarity metric aggregate_results was run with. "
+        "It is part of every pickle name, so this selects which aggregation "
+        "in $SCRATCH to read."
+    ),
+)
 def main(metric, main_outcome, split, plot_path, dataset, exclude_rois,
-         model_attributes_path):
+         model_attributes_path, aps_similarity_metric):
     rois = get_rois(dataset, exclude=parse_roi_names(exclude_rois))
     date_str = datetime.now().strftime("%Y%m%d")
 
@@ -98,7 +113,12 @@ def main(metric, main_outcome, split, plot_path, dataset, exclude_rois,
     # Load data
     logger.info("Loading data...")
     subject_avg_df = pickle.load(
-        open(scratch / f"subject_avg_df_equiv_{main_outcome}.pkl", "rb")
+        open(
+            aggregation_pickle(
+                scratch, f"subject_avg_df_equiv_{main_outcome}", aps_similarity_metric
+            ),
+            "rb",
+        )
     )
 
     subject_avg_df['model_provider'] = subject_avg_df['model'].str.split('/').str[0]

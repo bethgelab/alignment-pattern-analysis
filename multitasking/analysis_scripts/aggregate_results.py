@@ -13,6 +13,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from multitasking.analyses.alignment_patterns.base import (
+    SIMILARITY_METRICS,
+    aggregation_pickle,
+)
 from multitasking.analyses.alignment_patterns.brain_brain_alignment_patterns import (
     PairwiseBrainBrainAlignmentPatterns,
 )
@@ -82,8 +86,18 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
 @click.option(
     '--aps-similarity-metric',
     default='pearson',
-    help='Similarity metric to use for alignment pattern similarity (default: pearson)',
-    type=click.Choice(['pearson']),
+    show_default=True,
+    help=(
+        "Similarity metric for comparing alignment patterns. 'mse' is the "
+        "mean squared error between two patterns, reported negated so that "
+        "larger stays 'more similar' for every metric: the best model is "
+        "still the maximum and the equivalence bands still open downwards. "
+        "Unlike 'pearson' it is sensitive to scale and offset, so its values "
+        "are only comparable within one --main-outcome. Every pickle this "
+        "script writes is suffixed '_aps-<metric>', so both metrics can share "
+        "one $SCRATCH."
+    ),
+    type=click.Choice(list(SIMILARITY_METRICS)),
 )
 @click.option(
     '--main-outcome',
@@ -131,6 +145,9 @@ def main(dataset: str,
     if excluded:
         logger.info(f"Excluding ROIs {excluded}; {len(rois)} remain: {rois}")
     SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
+
+    def pickle_path(stem: str) -> Path:
+        return aggregation_pickle(SCRATCH, stem, aps_similarity_metric)
 
     # Load and organize results
     full_df = load_bm_results(output_supdir)
@@ -230,7 +247,7 @@ def main(dataset: str,
         np.asarray(full_df["score"]) / np.asarray(full_df["lower_noise_ceiling"])
     )
 
-    pickle.dump(full_df, open(SCRATCH / "full_df_extended.pkl", "wb"))
+    pickle.dump(full_df, open(pickle_path("full_df_extended"), "wb"))
 
     ############################################################
     # APS analysis
@@ -278,11 +295,11 @@ def main(dataset: str,
         model_brain_similarities.append(model_brain_similarities_df)
         pickle.dump(
             model_brain_alignment_patterns,
-            open(SCRATCH / f"model_brain_alignment_patterns_{metric}_{main_outcome}.pkl", "wb")
+            open(pickle_path(f"model_brain_alignment_patterns_{metric}_{main_outcome}"), "wb")
             )
         pickle.dump(
             pw_brain_brain_alignment_patterns,
-            open(SCRATCH / f"pw_brain_brain_alignment_patterns_{metric}_{main_outcome}.pkl", "wb")
+            open(pickle_path(f"pw_brain_brain_alignment_patterns_{metric}_{main_outcome}"), "wb")
             )
 
     full_df = full_df.merge(pd.concat(model_brain_similarities, ignore_index=True),
@@ -402,9 +419,9 @@ def main(dataset: str,
     # Save intermediate results
 
 
-    pickle.dump(intersubject_df, open(SCRATCH / "intersubject_df.pkl", "wb"))
-    pickle.dump(pairwise_subject_df, open(SCRATCH / "pairwise_subject_df.pkl", "wb"))
-    pickle.dump(full_df, open(SCRATCH / "full_df.pkl", "wb"))
+    pickle.dump(intersubject_df, open(pickle_path("intersubject_df"), "wb"))
+    pickle.dump(pairwise_subject_df, open(pickle_path("pairwise_subject_df"), "wb"))
+    pickle.dump(full_df, open(pickle_path("full_df"), "wb"))
 
     # Bootstrap analysis
 
@@ -472,7 +489,7 @@ def main(dataset: str,
     subject_avg_df = subject_avg_df.merge(ci_df, on=["roi", "model", "metric",
                                                      "is_best_layer"], how="left")
     logger.info(f"Subject avg df after merging CI: {subject_avg_df.shape}")
-    pickle.dump(subject_avg_df, open(SCRATCH / f"subject_avg_df_{main_outcome}.pkl", "wb"))
+    pickle.dump(subject_avg_df, open(pickle_path(f"subject_avg_df_{main_outcome}"), "wb"))
     subject_avg_df = run_equivalence_analysis(subject_avg_df, main_outcome=main_outcome)
 
 
@@ -515,12 +532,12 @@ def main(dataset: str,
     ############################################################
 
 
-    pickle.dump(full_df, open(SCRATCH / "full_df_extended.pkl", "wb"))
-    pickle.dump(df, open(SCRATCH / f"df_{main_outcome}.pkl", "wb"))
-    pickle.dump(subject_avg_df, open(SCRATCH / f"subject_avg_df_equiv_{main_outcome}.pkl", "wb"))
+    pickle.dump(full_df, open(pickle_path("full_df_extended"), "wb"))
+    pickle.dump(df, open(pickle_path(f"df_{main_outcome}"), "wb"))
+    pickle.dump(subject_avg_df, open(pickle_path(f"subject_avg_df_equiv_{main_outcome}"), "wb"))
 
 
-    with open(SCRATCH / f"bootstrap_all_{main_outcome}.pkl", "wb") as f:
+    with open(pickle_path(f"bootstrap_all_{main_outcome}"), "wb") as f:
         pickle.dump(bootstrap_all, f)
 
     logger.info("Analysis complete! Results saved to SCRATCH directory.")

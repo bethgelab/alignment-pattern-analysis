@@ -17,6 +17,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from multitasking.analyses.alignment_patterns.base import (
+    SIMILARITY_METRICS,
+    aggregation_pickle,
+)
 from multitasking.analyses.dataframe_utils import get_order
 from multitasking.CONSTANTS import get_rois, parse_roi_names
 from multitasking.plot_creation.plot_utils import save_this, set_ticks_0_1
@@ -72,8 +76,19 @@ logger = logging.getLogger(__name__)
         "patterns in the pickles are vectors over the retained ROIs."
     ),
 )
+@click.option(
+    "--aps-similarity-metric",
+    type=click.Choice(list(SIMILARITY_METRICS)),
+    default="pearson",
+    show_default=True,
+    help=(
+        "Alignment-pattern similarity metric aggregate_results was run with. "
+        "It is part of every pickle name, so this selects which aggregation "
+        "in $SCRATCH to read."
+    ),
+)
 def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
-         exclude_rois):
+         exclude_rois, aps_similarity_metric):
     rois = get_rois(dataset, exclude=parse_roi_names(exclude_rois))
     scratch = Path(os.environ.get("SCRATCH", "/scratch"))
     script_dir = Path(__file__).resolve().parent
@@ -86,7 +101,12 @@ def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
 
     # Load data
     subject_avg_df_model_order = pickle.load(
-        open(scratch / "subject_avg_df_equiv_score_norm_lower.pkl", "rb")
+        open(
+            aggregation_pickle(
+                scratch, "subject_avg_df_equiv_score_norm_lower", aps_similarity_metric
+            ),
+            "rb",
+        )
     )
     subject_avg_df_model_order["model_provider"] = subject_avg_df_model_order["model"].str.split("/").str[0]
     subject_avg_df_model_order = subject_avg_df_model_order[
@@ -103,7 +123,12 @@ def main(dataset, metric, main_outcome, split, plot_path, taskonomy,
         order_by="model")
 
     subject_avg_df = pickle.load(
-        open(scratch / f"subject_avg_df_equiv_{main_outcome}.pkl", "rb")
+        open(
+            aggregation_pickle(
+                scratch, f"subject_avg_df_equiv_{main_outcome}", aps_similarity_metric
+            ),
+            "rb",
+        )
     )
 
     subject_avg_df["model_provider"] = subject_avg_df["model"].str.split("/").str[0]

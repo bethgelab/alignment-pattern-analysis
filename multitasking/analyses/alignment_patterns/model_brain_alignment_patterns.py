@@ -34,7 +34,10 @@ class ModelBrainAlignmentPatterns(AlignmentPattern):
         """Initialize a model–brain alignment pattern object.
 
         Args:
-            metric: Alignment metric (currently only "pearson" is supported).
+            metric: Alignment metric of the underlying scores ("rsa" or
+                "linear_predictivity"). This is the benchmark metric, not the
+                pattern-similarity metric, which is chosen per call in
+                :meth:`get_alignment_pattern_similarity`.
             main_outcome: Column to use for alignment patterns, default is "score"
             (i.e., the raw score).
         """
@@ -112,8 +115,10 @@ class ModelBrainAlignmentPatterns(AlignmentPattern):
             predictors: List of predictor identifiers.
             rois: List of ROI names.
             brain_brain_alignment_patterns: PairwiseBrainBrainAlignmentPatterns object.
-            similarity_metric: Similarity metric. Only ``"pearson"`` is
-                supported.
+            similarity_metric: Similarity metric, one of
+                :data:`~multitasking.analyses.alignment_patterns.base.SIMILARITY_METRICS`.
+                ``"mse"`` is reported negated, so that larger is more similar
+                for every metric.
 
         Returns:
             pd.DataFrame: Structure: roi -> predictor -> subject -> similarity scores

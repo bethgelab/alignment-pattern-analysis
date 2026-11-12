@@ -26,7 +26,7 @@ EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
 OUTPUT_SUPDIR="${OUTPUT_SUPDIR:-$DIR/precomputed_results/benchmark/}" # should contain subdirectories of individual model runs
 INTERSUBJECT_DIR="${INTERSUBJECT_DIR:-$DIR/precomputed_results/intersubject}" # should contain the (1) subdirectory that holds the intersubject results
 PAIRWISE_SUBJECT_DIR="${PAIRWISE_SUBJECT_DIR:-$DIR/precomputed_results/pairwise}" # should contain the (many) subdirectories that holds the pairwise subject results
-APSIMILARITY_METRIC="pearson" # only pearson is supported for now
+APSIMILARITY_METRIC="${APSIMILARITY_METRIC:-pearson}" # pearson or mse
 MAIN_OUTCOME="score" # score, score_norm_upper, score_norm_lower
 
 MAIN_OUTCOMES="score score_norm_lower" # score, score_norm_upper, score_norm_lower

@@ -16,6 +16,10 @@ DATASET="${DATASET:-bold_moments}"
 # aggregation and every figure built from it.
 EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
 
+# Alignment-pattern similarity metric the aggregation was run with: pearson or
+# mse. It is part of every pickle name, so it selects which aggregation to read.
+APSIMILARITY_METRIC="${APSIMILARITY_METRIC:-pearson}"
+
 # Where to write the figures. Empty means the script's own default,
 # results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
 # this explicitly when plotting another dataset.
@@ -48,7 +52,8 @@ for metric in $METRICS; do
                 --main-outcome "$main_outcome" \
                 --order "$ORDER" \
                 --taskonomy "$taskonomy" "${PLOT_ARGS[@]}" \
-                --exclude-rois "$EXCLUDE_ROIS"
+                --exclude-rois "$EXCLUDE_ROIS" \
+                --aps-similarity-metric "$APSIMILARITY_METRIC"
         done
     done
 done
