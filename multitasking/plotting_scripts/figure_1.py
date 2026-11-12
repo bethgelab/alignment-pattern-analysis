@@ -20,7 +20,7 @@ import numpy as np
 import seaborn as sns
 
 from multitasking.analyses.dataframe_utils import get_order
-from multitasking.CONSTANTS import get_rois, get_subjects
+from multitasking.CONSTANTS import get_rois, get_subjects, parse_roi_names
 from multitasking.plot_creation import cmap_colors
 from multitasking.plot_creation.plot_utils import (
     save_this,
@@ -74,8 +74,18 @@ logger = logging.getLogger(__name__)
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
 )
-def main(dataset, metric, roi, main_outcome, split, plot_path):
-    rois = get_rois(dataset)
+@click.option(
+    "--exclude-rois",
+    type=str,
+    default="",
+    help=(
+        "Comma-separated ROI names to drop entirely, e.g. 'V6,V6A'. Must "
+        "match what aggregate_results was run with, since the alignment "
+        "patterns in the pickles are vectors over the retained ROIs."
+    ),
+)
+def main(dataset, metric, roi, main_outcome, split, plot_path, exclude_rois):
+    rois = get_rois(dataset, exclude=parse_roi_names(exclude_rois))
     subjects = get_subjects(dataset)
     date_str = datetime.now().strftime("%Y%m%d")
     # Paths

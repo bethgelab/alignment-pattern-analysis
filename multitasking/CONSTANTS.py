@@ -7,6 +7,7 @@ not change. Dataset-aware code should use :func:`get_rois` and
 :func:`get_subjects` instead.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 ROIS = [
@@ -68,17 +69,49 @@ def _constants(dataset: str) -> DatasetConstants:
         ) from None
 
 
-def get_rois(dataset: str = BOLD_MOMENTS) -> list[str]:
+def get_rois(
+    dataset: str = BOLD_MOMENTS, exclude: Iterable[str] | None = None
+) -> list[str]:
     """Returns the canonical ROI names for a dataset.
 
     Args:
         dataset: Dataset name (default: BOLD Moments, for backwards
             compatibility with the paper's analysis scripts).
+        exclude: ROI names to leave out, in canonical order otherwise. An
+            alignment pattern is a vector over these ROIs, so excluding one
+            changes every pattern, not just that ROI's entry.
 
     Returns:
         A new list of ROI names.
+
+    Raises:
+        ValueError: If a name in ``exclude`` is not an ROI of this dataset,
+            which would otherwise silently exclude nothing.
     """
-    return list(_constants(dataset).rois)
+    rois = list(_constants(dataset).rois)
+    if not exclude:
+        return rois
+
+    excluded = set(exclude)
+    unknown = sorted(excluded - set(rois))
+    if unknown:
+        raise ValueError(
+            f"Cannot exclude {unknown} from the {dataset} ROIs: "
+            f"no such ROI. Known ROIs are {rois}."
+        )
+    return [roi for roi in rois if roi not in excluded]
+
+
+def parse_roi_names(names: str) -> list[str]:
+    """Split a comma-separated CLI ROI list into names.
+
+    Args:
+        names: Comma-separated ROI names, possibly empty.
+
+    Returns:
+        The names, with blanks and surrounding whitespace removed.
+    """
+    return [name.strip() for name in names.split(",") if name.strip()]
 
 
 def get_subjects(dataset: str = BOLD_MOMENTS) -> list[str]:
