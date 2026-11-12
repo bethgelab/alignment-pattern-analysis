@@ -6,6 +6,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Which dataset's canonical ROI/subject lists to use: bold_moments (default) or nsd.
+DATASET="${DATASET:-bold_moments}"
+
+# Where to write the figures. Empty means the script's own default,
+# results/boldmoments/plots/YYYYMMDD -- which is BOLD-Moments-named, so set
+# this explicitly when plotting another dataset.
+PLOT_PATH="${PLOT_PATH:-}"
+PLOT_ARGS=()
+if [ -n "$PLOT_PATH" ]; then PLOT_ARGS=(--plot-path "$PLOT_PATH"); fi
+
 # Metrics: rsa, linear_predictivity
 METRICS="rsa linear_predictivity"
 
@@ -20,15 +30,17 @@ for metric in $METRICS; do
     for main_outcome in $MAIN_OUTCOMES; do
         echo "Running: metric=$metric main_outcome=$main_outcome taskonomy=False"
         python -m multitasking.plotting_scripts.figure_0 \
+                --dataset "$DATASET" \
             --metric "$metric" \
             --main-outcome "$main_outcome" \
-            --taskonomy False
+            --taskonomy False "${PLOT_ARGS[@]}"
 
         echo "Running: metric=$metric main_outcome=$main_outcome taskonomy=True"
         python -m multitasking.plotting_scripts.figure_0 \
+                --dataset "$DATASET" \
             --metric "$metric" \
             --main-outcome "$main_outcome" \
-            --taskonomy True
+            --taskonomy True "${PLOT_ARGS[@]}"
     done
 done
 

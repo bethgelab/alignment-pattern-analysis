@@ -20,8 +20,7 @@ import numpy as np
 import seaborn as sns
 
 from multitasking.analyses.dataframe_utils import get_order
-from multitasking.CONSTANTS import ROIS as rois
-from multitasking.CONSTANTS import SUBJECTS
+from multitasking.CONSTANTS import get_rois, get_subjects
 from multitasking.plot_creation import cmap_colors
 from multitasking.plot_creation.plot_utils import (
     save_this,
@@ -68,7 +67,16 @@ logger = logging.getLogger(__name__)
     default=None,
     help="Output directory for plots (default: results/boldmoments/plots)",
 )
-def main(metric, roi, main_outcome, split, plot_path):
+@click.option(
+    "--dataset",
+    type=click.Choice(["bold_moments", "nsd"]),
+    default="bold_moments",
+    show_default=True,
+    help="Which dataset's canonical ROI and subject lists to use.",
+)
+def main(dataset, metric, roi, main_outcome, split, plot_path):
+    rois = get_rois(dataset)
+    subjects = get_subjects(dataset)
     date_str = datetime.now().strftime("%Y%m%d")
     # Paths
     scratch = Path(os.environ.get("SCRATCH", "/scratch"))
@@ -140,6 +148,9 @@ def main(metric, roi, main_outcome, split, plot_path):
         )
     )
     brain_brain_sim_df = brain_brain_ap.get_brain_brain_alignment_pattern_similarity(
+        rois=rois,
+        subjects=subjects,  # without these the defaults are BOLD Moments', and
+                            # another dataset's subjects all miss -> NaN similarity
         similarity_metric=model_brain_ap.similarity_metric # use same similarity metric as model-brain alignment patterns
     )
 
@@ -194,7 +205,7 @@ def main(metric, roi, main_outcome, split, plot_path):
     # Panel 2: Alignment patterns
     bb_aps_roi = brain_brain_ap.get_avg_target_pattern_dict_by_roi(
         rois,
-        SUBJECTS) # average target patterns by ROI
+        subjects) # average target patterns by ROI
     brain_mean = bb_aps_roi[roi].mean(axis=0)
     brain_std = bb_aps_roi[roi].std(axis=0, ddof=1)
     n = bb_aps_roi[roi].shape[0]
@@ -374,7 +385,7 @@ def main(metric, roi, main_outcome, split, plot_path):
     save_this(
         plot_path,
         f"figure_1_{roi}_{metric}_{main_outcome}",
-        formats=["png", "svg"],
+        formats=["png"],
         transparent=False,
         dpi=300,
     )

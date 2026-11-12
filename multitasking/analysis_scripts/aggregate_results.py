@@ -19,13 +19,13 @@ from multitasking.analyses.alignment_patterns.brain_brain_alignment_patterns imp
 from multitasking.analyses.alignment_patterns.model_brain_alignment_patterns import (
     ModelBrainAlignmentPatterns,
 )
-from multitasking.analyses.equivalence_analysis import run_equivalence_analysis
-from multitasking.CONSTANTS import ROIS as rois
 from multitasking.analyses.dataframe_utils import (
     get_order,
     load_bm_results,
     select_top_layer,
 )
+from multitasking.analyses.equivalence_analysis import run_equivalence_analysis
+from multitasking.CONSTANTS import get_rois, get_subjects
 from multitasking.utils.scoresheet_loading import load_scoresheets_from_parent_dir
 
 # Configure logging
@@ -34,6 +34,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# The repo root, two levels up from multitasking/analysis_scripts/.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MODEL_ATTRIBUTES_PATH = PROJECT_ROOT / "model_attributes.ods"
 
 
 
@@ -87,12 +91,31 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
     help='Main outcome to use for selecting top layer (default: score)',
     type=click.Choice(['score', 'score_norm_upper', 'score_norm_lower']),
 )
-def main(output_supdir: Path,
+@click.option(
+    "--dataset",
+    type=click.Choice(["bold_moments", "nsd"]),
+    default="bold_moments",
+    show_default=True,
+    help="Which dataset's canonical ROI and subject lists to use.",
+)
+@click.option(
+    "--model-attributes-path",
+    default=str(DEFAULT_MODEL_ATTRIBUTES_PATH),
+    show_default=True,
+    help=("Spreadsheet of per-model attributes (architecture, training data, ...) "
+          "merged into the output dataframe. Reading it needs odfpy."),
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+def main(dataset: str,
+         output_supdir: Path,
          intersubject_dir: Path,
          pairwise_subject_dir: Path,
          aps_similarity_metric: str,
+         model_attributes_path: Path,
          main_outcome: str = "score"):
     """Main function to aggregate and analyze results."""
+    rois = get_rois(dataset)
+    subjects = get_subjects(dataset)
     SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
 
     # Load and organize results
@@ -443,7 +466,6 @@ def main(output_supdir: Path,
     # Add model attributes
     ############################################################
     # Load model attributes
-    model_attributes_path = Path("model_attributes.ods")
     model_attributes = pd.read_excel(model_attributes_path, engine="odf")
 
     # Merge the model attributes into main DF
