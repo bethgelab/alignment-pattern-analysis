@@ -1,6 +1,7 @@
 """Base class and utilities for alignment patterns."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -16,6 +17,33 @@ from scipy.stats import pearsonr
 #: similarity as the right-hand ceiling of the scatter panel. ``"mse"`` is
 #: therefore reported *negated* -- see :func:`negative_mean_squared_error`.
 SIMILARITY_METRICS = ("pearson", "mse")
+
+
+def aggregation_pickle(scratch: Path, stem: str, aps_similarity_metric: str) -> Path:
+    """Returns the path of a pickle written by ``aggregate_results``.
+
+    Every pickle the aggregation writes is named after the alignment-pattern
+    similarity metric it was run with, so aggregations with different metrics
+    can share one ``$SCRATCH`` without overwriting each other. The ``aps-``
+    prefix keeps it apart from the alignment metric (``rsa``,
+    ``linear_predictivity``) that several stems already contain.
+
+    Args:
+        scratch: Directory the aggregation writes to and the figures read from.
+        stem: File name without the metric suffix and extension, e.g.
+            ``"subject_avg_df_equiv_score_norm_lower"``.
+        aps_similarity_metric: One of :data:`SIMILARITY_METRICS`.
+
+    Returns:
+        ``scratch / f"{stem}_aps-{aps_similarity_metric}.pkl"``.
+    """
+    if aps_similarity_metric not in SIMILARITY_METRICS:
+        raise ValueError(
+            f"Unknown alignment-pattern similarity metric "
+            f"{aps_similarity_metric!r}; expected one of "
+            f"{', '.join(repr(m) for m in SIMILARITY_METRICS)}."
+        )
+    return Path(scratch) / f"{stem}_aps-{aps_similarity_metric}.pkl"
 
 
 class AlignmentPattern(ABC):

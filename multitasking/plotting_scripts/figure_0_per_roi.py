@@ -31,6 +31,10 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.axes import Axes
 
+from multitasking.analyses.alignment_patterns.base import (
+    SIMILARITY_METRICS,
+    aggregation_pickle,
+)
 from multitasking.analyses.dataframe_utils import get_order
 from multitasking.CONSTANTS import get_rois, parse_roi_names
 from multitasking.plot_creation.plot_utils import save_this
@@ -52,12 +56,19 @@ GRID_LABEL_BAND = 1.6
 
 
 def load_subject_avg_df(
-    scratch: Path, main_outcome: str, split: str, metric: str, taskonomy: bool
+    scratch: Path,
+    aps_similarity_metric: str,
+    main_outcome: str,
+    split: str,
+    metric: str,
+    taskonomy: bool,
 ) -> pd.DataFrame:
     """Load the aggregated per-(model, ROI) scores for one metric and outcome.
 
     Args:
         scratch: Directory ``aggregate_results`` wrote its pickles to.
+        aps_similarity_metric: The metric that aggregation was run with, which
+            is part of the pickle name.
         main_outcome: ``score``, ``score_norm_upper`` or ``score_norm_lower``.
         split: Data split to keep, normally ``test``.
         metric: ``rsa`` or ``linear_predictivity``.
@@ -66,7 +77,9 @@ def load_subject_avg_df(
     Returns:
         One row per (model, ROI), restricted to each model's best layer.
     """
-    path = scratch / f"subject_avg_df_equiv_{main_outcome}.pkl"
+    path = aggregation_pickle(
+        scratch, f"subject_avg_df_equiv_{main_outcome}", aps_similarity_metric
+    )
     with open(path, "rb") as handle:
         df = pickle.load(handle)
 
@@ -81,7 +94,9 @@ def load_subject_avg_df(
     return df[keep]
 
 
-def global_model_order(scratch: Path, split: str, taskonomy: bool) -> list[str]:
+def global_model_order(
+    scratch: Path, aps_similarity_metric: str, split: str, taskonomy: bool
+) -> list[str]:
     """Rank models worst-to-best the way ``figure_0`` does.
 
     Ordering by noise-ceiling-normalized RSA, pooled over ROIs, keeps the bars
@@ -89,6 +104,7 @@ def global_model_order(scratch: Path, split: str, taskonomy: bool) -> list[str]:
 
     Args:
         scratch: Directory holding the aggregated pickles.
+        aps_similarity_metric: The metric that aggregation was run with.
         split: Data split to rank on.
         taskonomy: Whether to include the taskonomy models.
 
@@ -96,7 +112,7 @@ def global_model_order(scratch: Path, split: str, taskonomy: bool) -> list[str]:
         Model names, lowest score first.
     """
     df = load_subject_avg_df(
-        scratch, "score_norm_lower", split, "rsa", taskonomy
+        scratch, aps_similarity_metric, "score_norm_lower", split, "rsa", taskonomy
     )
     return get_order(
         df,
@@ -291,6 +307,17 @@ def draw_roi_panel(
     show_default=True,
     help="Also write one overview figure with all ROIs as panels.",
 )
+@click.option(
+    "--aps-similarity-metric",
+    type=click.Choice(list(SIMILARITY_METRICS)),
+    default="pearson",
+    show_default=True,
+    help=(
+        "Alignment-pattern similarity metric aggregate_results was run with. "
+        "It is part of every pickle name, so this selects which aggregation "
+        "in $SCRATCH to read."
+    ),
+)
 def main(
     dataset: str,
     metric: str,
@@ -300,6 +327,7 @@ def main(
     taskonomy: bool,
     roi: str | None,
     exclude_rois: str,
+    aps_similarity_metric: str,
     order: str,
     ylim_top: float | None,
     grid: bool,
@@ -327,9 +355,11 @@ def main(
     with open(project_root / "model_legend_mapping.json") as handle:
         model_labels = json.load(handle)
 
-    model_order = global_model_order(scratch, split, taskonomy)
+    model_order = global_model_order(
+        scratch, aps_similarity_metric, split, taskonomy
+    )
     subject_avg_df = load_subject_avg_df(
-        scratch, main_outcome, split, metric, taskonomy
+        scratch, aps_similarity_metric, main_outcome, split, metric, taskonomy
     )
 
     missing_colors = sorted(set(model_order) - set(model_colors))

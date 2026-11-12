@@ -5,6 +5,7 @@ import pytest
 
 from multitasking.analyses.alignment_patterns.base import (
     SIMILARITY_METRICS,
+    aggregation_pickle,
     get_similarity_function,
     negative_mean_squared_error,
     vectorized_similarity_mean,
@@ -37,3 +38,11 @@ def test_vectorized_similarity_mean_matches_the_pairwise_function(metric):
     else:
         expected = np.mean([fn(ref, t) for t in targets])
     assert vectorized_similarity_mean(ref, targets, metric) == pytest.approx(expected)
+
+
+def test_aggregation_pickles_are_named_after_the_similarity_metric(tmp_path):
+    # Two metrics aggregated into one $SCRATCH must not overwrite each other.
+    paths = {aggregation_pickle(tmp_path, "df_score", m) for m in SIMILARITY_METRICS}
+    assert paths == {tmp_path / f"df_score_aps-{m}.pkl" for m in SIMILARITY_METRICS}
+    with pytest.raises(ValueError, match="similarity metric"):
+        aggregation_pickle(tmp_path, "df_score", "spearman")

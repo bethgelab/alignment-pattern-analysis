@@ -26,12 +26,7 @@ EXCLUDE_ROIS="${EXCLUDE_ROIS:-}"
 OUTPUT_SUPDIR="${OUTPUT_SUPDIR:-$DIR/precomputed_results/benchmark/}" # should contain subdirectories of individual model runs
 INTERSUBJECT_DIR="${INTERSUBJECT_DIR:-$DIR/precomputed_results/intersubject}" # should contain the (1) subdirectory that holds the intersubject results
 PAIRWISE_SUBJECT_DIR="${PAIRWISE_SUBJECT_DIR:-$DIR/precomputed_results/pairwise}" # should contain the (many) subdirectories that holds the pairwise subject results
-# How to compare two alignment patterns: "pearson" or "mse". MSE is reported
-# negated, so larger still means more similar and nothing downstream has to
-# flip. The pickles below are not named after this choice, so point $SCRATCH
-# at a different directory for each metric or the second run overwrites the
-# first.
-APSIMILARITY_METRIC="${APSIMILARITY_METRIC:-pearson}"
+APSIMILARITY_METRIC="${APSIMILARITY_METRIC:-pearson}" # pearson or mse
 MAIN_OUTCOME="score" # score, score_norm_upper, score_norm_lower
 
 MAIN_OUTCOMES="score score_norm_lower" # score, score_norm_upper, score_norm_lower
