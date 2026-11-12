@@ -64,6 +64,84 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
 
 
 
+#: Column naming the stimulus set a score was computed on. Written by
+#: benchmark.py and intersubject_consistency.py. Scoresheets produced before it
+#: existed do not carry it, so every use below degrades gracefully.
+STIMULUS_SET_COLUMN = "stimulus_set"
+
+
+def deduplication_keys(df: pd.DataFrame) -> list[str]:
+    """Returns the columns that identify one score.
+
+    ``split`` alone does not: a sweep that scored a model on NSD-synthetic and
+    one that scored it on NSD-core's held-out stimuli produce rows that are
+    identical under everything else, so de-duplicating without the stimulus set
+    would silently drop one of the two.
+
+    Args:
+        df: The scoresheet frame.
+
+    Returns:
+        The subset to pass to ``drop_duplicates``.
+    """
+    keys = ["model", "layer", "roi", "metric", "split", "subject"]
+    if STIMULUS_SET_COLUMN in df.columns:
+        keys.append(STIMULUS_SET_COLUMN)
+    return keys
+
+
+def check_stimulus_sets_align(
+    scores_df: pd.DataFrame, ceiling_df: pd.DataFrame, what: str
+) -> None:
+    """Checks that scores and noise ceilings describe the same stimuli.
+
+    The noise-ceiling merge joins on ``roi``, ``split``, ``subject`` and
+    ``metric``, none of which say which stimuli were shown. A model scored on
+    NSD-synthetic would merge happily against an NSD-core ceiling and be
+    normalised by it, with nothing raising.
+
+    Args:
+        scores_df: The model or pairwise scores.
+        ceiling_df: The noise ceilings being merged in.
+        what: Name of the ceiling, for the error message.
+
+    Raises:
+        ValueError: If the two disagree on the stimulus set within a split.
+    """
+    if (
+        STIMULUS_SET_COLUMN not in scores_df.columns
+        or STIMULUS_SET_COLUMN not in ceiling_df.columns
+    ):
+        logger.warning(
+            "Scoresheets predate the %r column, so the %s cannot be checked "
+            "against the stimuli the scores were computed on. Re-run the sweep "
+            "to get that guarantee.",
+            STIMULUS_SET_COLUMN,
+            what,
+        )
+        return
+
+    for split in sorted(set(scores_df["split"]) & set(ceiling_df["split"])):
+        in_scores = set(
+            scores_df.loc[scores_df["split"] == split, STIMULUS_SET_COLUMN]
+            .dropna()
+            .unique()
+        )
+        in_ceiling = set(
+            ceiling_df.loc[ceiling_df["split"] == split, STIMULUS_SET_COLUMN]
+            .dropna()
+            .unique()
+        )
+        if in_scores and in_ceiling and in_scores != in_ceiling:
+            raise ValueError(
+                f"In the {split!r} split, the scores were computed on "
+                f"{sorted(in_scores)} but the {what} on {sorted(in_ceiling)}. "
+                "Normalising one by the other would be meaningless. Re-run the "
+                "inter-subject sweep with the same config as the benchmark "
+                "sweep, or aggregate the two stimulus sets separately."
+            )
+
+
 @click.command()
 @click.option(
     '--output-supdir',
@@ -107,7 +185,7 @@ def bootstrap_rows_by_subject_fast(df, random_state=None):
 )
 @click.option(
     "--dataset",
-    type=click.Choice(["bold_moments", "nsd"]),
+    type=click.Choice(["bold_moments", "nsd", "nsd_synthetic"]),
     default="bold_moments",
     show_default=True,
     help="Which dataset's canonical ROI and subject lists to use.",
@@ -155,7 +233,7 @@ def main(dataset: str,
     # filter out rois not in the constant ROIS
     full_df = full_df[full_df["roi"].isin(rois)]
 
-    full_df.drop_duplicates(subset=["model", "layer", "roi", "metric", "split", "subject"], inplace=True)
+    full_df.drop_duplicates(subset=deduplication_keys(full_df), inplace=True)
 
     full_df["predictor"] = pd.concat([full_df["model"], full_df["layer"]], axis=1
                                        ).apply(lambda x: "__".join(x), axis=1)
@@ -175,25 +253,32 @@ def main(dataset: str,
                    & ~(pairwise_subject_df["layer"] == "V7")]) == 0, \
                        "Pairwise subject dataframe has duplicates other than V7/V7" # V7 was duplicate in config
     logger.info("No unexpected duplicates found in pairwise subject dataframe")
-    pairwise_subject_df.drop_duplicates(subset=["model", "layer", "roi", "metric", "split", "subject"],
-                                        inplace=True)
+    pairwise_subject_df.drop_duplicates(
+        subset=deduplication_keys(pairwise_subject_df), inplace=True
+    )
 
     # filter out rois not in the constant ROIS
     pairwise_subject_df = pairwise_subject_df.query("roi in @rois and layer in @rois")
 
     # Calculate upper noise ceiling for each ROI
     tmp_df = intersubject_df.query("layer == roi")
+    ceiling_columns = ["roi", "split", "subject", "metric", "score"]
+    if STIMULUS_SET_COLUMN in tmp_df.columns:
+        ceiling_columns.append(STIMULUS_SET_COLUMN)
     noise_ceiling_df = (
         tmp_df
-        .loc[:, ["roi", "split", "subject", "metric", "score"]]
+        .loc[:, ceiling_columns]
         .rename(columns={"score": "upper_noise_ceiling"})
     )
     assert not noise_ceiling_df.duplicated(
         ["roi", "split", "subject", "metric"]
     ).any()
 
+    check_stimulus_sets_align(
+        pairwise_subject_df, intersubject_df, "upper noise ceiling"
+    )
     pairwise_subject_df = pairwise_subject_df.merge(
-        noise_ceiling_df,
+        noise_ceiling_df.drop(columns=[STIMULUS_SET_COLUMN], errors="ignore"),
         on=["roi", "split", "subject", "metric"],
         how="left"
     )
@@ -225,8 +310,13 @@ def main(dataset: str,
     pairwise_subject_df["score_norm_lower"] = \
         pairwise_subject_df["score"] / pairwise_subject_df["lower_noise_ceiling"]
 
+    check_stimulus_sets_align(full_df, intersubject_df, "upper noise ceiling")
+    check_stimulus_sets_align(
+        full_df, pairwise_subject_df, "lower noise ceiling"
+    )
+
     full_df = full_df.merge(
-        noise_ceiling_df,
+        noise_ceiling_df.drop(columns=[STIMULUS_SET_COLUMN], errors="ignore"),
         on=["roi", "split", "subject", "metric"],
         how="left",
         validate="m:1", # many to one merge
