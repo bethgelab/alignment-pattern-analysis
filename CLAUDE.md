@@ -138,6 +138,12 @@ there) and `plotting_scripts/figure_*.py` (which read them back). Inside a SLURM
 `$SCRATCH` is node-local and deleted when the job ends, so set it explicitly to a
 persistent directory when aggregating results you intend to plot.
 
+Every pickle in that handoff is named `<stem>_aps-<metric>.pkl` after the
+alignment-pattern similarity metric (`pearson` or `mse`), via
+`alignment_patterns.base.aggregation_pickle`. So both metrics can share one `$SCRATCH`,
+and each figure script takes `--aps-similarity-metric` (`APSIMILARITY_METRIC` in the
+`run_*.sh` wrappers) to choose which one it reads.
+
 ### Models
 
 `models/build_model("provider/name")` splits on the first `/` and imports
