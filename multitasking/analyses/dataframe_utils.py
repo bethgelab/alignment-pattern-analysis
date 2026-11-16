@@ -127,3 +127,70 @@ def get_order(
     )
     grouped_avg_sorted_df = grouped_avg_df.sort_values(by=column_name) # type: ignore
     return grouped_avg_sorted_df[order_by].to_list()
+
+
+def align_order_to_available(
+    order: List[str],
+    available: set,
+    source: str = "the reference ordering",
+) -> List[str]:
+    """Restrict a model ordering to the models actually present.
+
+    Figures that compare two datasets must put the same model at the same x
+    position, so the ordering is ranked once on a reference dataset and reused.
+    The second dataset may not hold every one of those models - a sweep can
+    lose jobs - and ``DataFrame.loc`` would then silently insert all-NaN rows
+    rather than raise. Dropping the missing names keeps the relative order,
+    which is the whole point of reusing it.
+
+    Parameters
+    ----------
+    order : list of str
+        Model names in the order the bars should appear.
+    available : set
+        Model names present in the data being plotted.
+    source : str
+        Where ``order`` came from, for the log message.
+
+    Returns:
+    -------
+    list of str
+        ``order`` with the absent names removed, order otherwise unchanged.
+
+    Raises:
+    ------
+    ValueError
+        If no model in ``order`` is present in the data, which means the two
+        aggregations do not describe the same models at all.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    kept = [model for model in order if model in available]
+    missing = [model for model in order if model not in available]
+    if missing:
+        logger.warning(
+            "%d of %d models in %s are absent from these results and are "
+            "dropped from the x-axis: %s",
+            len(missing),
+            len(order),
+            source,
+            ", ".join(sorted(missing)),
+        )
+    extra = sorted(available - set(order))
+    if extra:
+        logger.warning(
+            "%d models in these results are absent from %s and cannot be "
+            "placed on the shared x-axis: %s",
+            len(extra),
+            source,
+            ", ".join(extra),
+        )
+    if not kept:
+        raise ValueError(
+            f"None of the {len(order)} models in {source} are present in "
+            "these results, so the two cannot share an x-axis. Check that "
+            "both aggregations were run over the same set of models."
+        )
+    return kept

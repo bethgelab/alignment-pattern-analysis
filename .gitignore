@@ -7,3 +7,6 @@ __pycache__
 output/
 data/
 results/
+
+# Local-only agent instructions; deliberately not tracked.
+CLAUDE.md

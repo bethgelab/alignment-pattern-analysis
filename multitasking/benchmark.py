@@ -11,7 +11,8 @@ import numpy as np
 import pandas as pd
 from benedict import benedict
 
-from multitasking.datasets import build_dataset
+from multitasking.datasets import TEST_SPLIT_CONFIG_KEY, build_dataset
+from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.fmri_data.voxel_consistency import (
     filter_by_voxel_consistency,
 )
@@ -25,9 +26,95 @@ from multitasking.utils.plotting import plot_rdm
 
 LOGGER = logging.getLogger(__name__)
 
-SUPPORTED_DATASETS = ("bold_moments", "nsd")
+SUPPORTED_DATASETS = ("bold_moments", "nsd", "nsd_synthetic")
 
 SCRATCH = Path(os.environ.get("SCRATCH", "/scratch"))
+
+
+def stimulus_set_names(
+    config: dict[str, Any],
+    dataset_train: FmriStimulusDataset,
+    dataset_test: FmriStimulusDataset,
+) -> dict[str, str]:
+    """Names the stimulus set behind each split, for the scoresheets.
+
+    ``split`` alone is ambiguous once a run can score one dataset's test split
+    against another's: "test" means NSD-core's held-out stimuli in one
+    scoresheet and NSD-synthetic's 220 in the next, and the analysis layer
+    de-duplicates and merges noise ceilings on ``split``.
+
+    Args:
+        config: The full configuration dictionary.
+        dataset_train: The train split's dataset.
+        dataset_test: The test split's dataset.
+
+    Returns:
+        ``{split: stimulus set name}``.
+    """
+    base_name = str(config["dataset"].get("name", "bold_moments"))
+    override = config.get(TEST_SPLIT_CONFIG_KEY) or {}
+    test_name = str((override.get("dataset") or {}).get("name", base_name))
+
+    def name_of(dataset: FmriStimulusDataset, fallback: str) -> str:
+        return str(getattr(dataset, "STIMULUS_SET", "") or fallback)
+
+    return {
+        "train": name_of(dataset_train, base_name),
+        "test": name_of(dataset_test, test_name),
+    }
+
+
+def check_splits_are_comparable(
+    dataset_train: FmriStimulusDataset, dataset_test: FmriStimulusDataset
+) -> None:
+    """Checks that the two splits share a voxel layout and an input size.
+
+    Differing sample counts are normal - BOLD Moments is 1000/102 and NSD
+    618/148 - but the voxel layout must be identical, because the pipeline
+    builds the voxel-consistency mask once from the *train* dataset's NCSNR as
+    a positional vector in ROI-vertex order and applies it to both splits, and
+    because linear predictivity fits on train voxels and predicts test voxels.
+
+    A stride mismatch surfaces as an IndexError and an ROI-set mismatch as a
+    KeyError, but an ROI *ordering* mismatch is silent unless
+    ``apply_consistency_threshold`` happens to be on. Hence this check.
+
+    Args:
+        dataset_train: The train split's dataset.
+        dataset_test: The test split's dataset.
+
+    Raises:
+        ValueError: If the two disagree on ROI names and their order, on any
+            ROI's vertex indices, or on the stimulus resolution.
+    """
+    train_masks, test_masks = dataset_train.roi_masks, dataset_test.roi_masks
+
+    if list(train_masks.roi_names) != list(test_masks.roi_names):
+        raise ValueError(
+            "The train and test splits have different ROIs, or the same ROIs "
+            f"in a different order: {list(train_masks.roi_names)} vs "
+            f"{list(test_masks.roi_names)}. Their voxels would not line up."
+        )
+
+    for roi_name in train_masks.roi_names:
+        if not np.array_equal(
+            train_masks.rois[roi_name], test_masks.rois[roi_name]
+        ):
+            raise ValueError(
+                f"The train and test splits select different vertices for "
+                f"{roi_name} ({len(train_masks.rois[roi_name])} vs "
+                f"{len(test_masks.rois[roi_name])}). They must share an atlas, "
+                "a subsample stride and any ROI grouping."
+            )
+
+    train_resolution = getattr(dataset_train, "resolution", None)
+    test_resolution = getattr(dataset_test, "resolution", None)
+    if train_resolution != test_resolution:
+        raise ValueError(
+            f"The train and test splits resize stimuli differently "
+            f"({train_resolution} vs {test_resolution}), so their features are "
+            "not comparable."
+        )
 
 
 @click.command()
@@ -94,7 +181,10 @@ def benchmark(
         curr_time_str = f"_{time.time()}"
         config["curr_time"] = curr_time_str
     config_full_hash = config_hash(config)
-    config_inputs_hash = config_hash(config, ["dataset", "feature_extraction", "fmri"])
+    config_inputs_hash = config_hash(
+        config,
+        ["dataset", "feature_extraction", "fmri", TEST_SPLIT_CONFIG_KEY],
+    )
 
     output_dir = Path(output_dir) / config_full_hash
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -125,6 +215,15 @@ def benchmark(
     if dataset_key in SUPPORTED_DATASETS:
         dataset_train = build_dataset(config, split="train")
         dataset_test = build_dataset(config, split="test")
+        check_splits_are_comparable(dataset_train, dataset_test)
+        stimulus_sets = stimulus_set_names(config, dataset_train, dataset_test)
+        LOGGER.info(
+            "Train split: %d samples from %s. Test split: %d samples from %s.",
+            len(dataset_train.sample_ids),
+            stimulus_sets["train"],
+            len(dataset_test.sample_ids),
+            stimulus_sets["test"],
+        )
 
         reduced_features_train, feature_projectors_train = compute_model_representation(
             config=config,
@@ -239,6 +338,7 @@ def benchmark(
                 splits,
                 output_path=output_dir,
                 subject_id=subject_id,
+                stimulus_sets=stimulus_sets,
             )
 
             compute_linear_predictivity(
@@ -250,6 +350,7 @@ def benchmark(
                 config,
                 output_path=output_dir,
                 subject_id=subject_id,
+                stimulus_sets=stimulus_sets,
             )
 
     else:
@@ -265,6 +366,7 @@ def compute_rsa(
     splits: list[str],
     output_path: Path,
     subject_id: str,
+    stimulus_sets: dict[str, str] | None = None,
 ) -> None:
     """Computes the model-brain alignment using RSA.
 
@@ -282,6 +384,9 @@ def compute_rsa(
         rois_to_indices: The rois to indices.
         cache_path: The path to the cache directory.
         output_path: The path to the output directory.
+        stimulus_sets: ``{split: stimulus set name}``, recorded per row so
+            that "test" is not ambiguous between datasets. Defaults to the
+            configured dataset name for every split.
     """
     if not config.get("rsa.enabled", False):
         LOGGER.info("RSA is disabled. Skipping RSA computation.")
@@ -289,6 +394,8 @@ def compute_rsa(
 
     LOGGER.info("Computing RSA ...")
     rsa = RSA()
+    stimulus_sets = stimulus_sets or {}
+    default_stimulus_set = str(config["dataset"].get("name", "bold_moments"))
 
     model_rdms: dict[str, np.ndarray] = {}
     brain_rdms: dict[str, np.ndarray] = {}
@@ -311,6 +418,9 @@ def compute_rsa(
                         "layer": layer,
                         "roi": roi,
                         "split": split,
+                        "stimulus_set": stimulus_sets.get(
+                            split, default_stimulus_set
+                        ),
                         "subject": subject_id,
                         "n_features_1_model": features1.shape[-1],
                         "n_features_2_brain": features2.shape[-1],
@@ -366,6 +476,7 @@ def compute_linear_predictivity(
     config,
     output_path: Path,
     subject_id: str,
+    stimulus_sets: dict[str, str] | None = None,
 ) -> None:
     if not config.get("linear_predictivity.enabled", False):
         LOGGER.info(
@@ -381,6 +492,8 @@ def compute_linear_predictivity(
         if key != "enabled"
     }
     linear_predictivity = LinearPredictivity(**kwargs)
+    stimulus_sets = stimulus_sets or {}
+    default_stimulus_set = str(config["dataset"].get("name", "bold_moments"))
 
     scores: list[dict[str, Any]] = []
 
@@ -412,6 +525,9 @@ def compute_linear_predictivity(
                         "layer": layer,
                         "roi": roi,
                         "split": split,
+                        "stimulus_set": stimulus_sets.get(
+                            split, default_stimulus_set
+                        ),
                         "subject": subject_id,
                         "metric": "linear_predictivity",
                         "n_features_1_model": features1.shape[-1],

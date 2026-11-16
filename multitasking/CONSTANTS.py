@@ -31,6 +31,9 @@ NSD_SUBJECTS = [f"subj{i:02d}" for i in range(1, 9)]
 
 BOLD_MOMENTS = "bold_moments"
 NSD = "nsd"
+# NSD-synthetic: the same eight subjects, the same fsaverage HCP-MMP parcels,
+# 220 non-naturalistic stimuli in place of NSD's natural scenes.
+NSD_SYNTHETIC = "nsd_synthetic"
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,9 @@ class DatasetConstants:
 DATASET_CONSTANTS: dict[str, DatasetConstants] = {
     BOLD_MOMENTS: DatasetConstants(tuple(ROIS), tuple(SUBJECTS), "fsLR32k"),
     NSD: DatasetConstants(tuple(NSD_ROIS), tuple(NSD_SUBJECTS), "fsaverage"),
+    NSD_SYNTHETIC: DatasetConstants(
+        tuple(NSD_ROIS), tuple(NSD_SUBJECTS), "fsaverage"
+    ),
 }
 
 

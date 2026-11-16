@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
+from multitasking.datasets import TEST_SPLIT_CONFIG_KEY
 from multitasking.datasets_base import FmriStimulusDataset
 from multitasking.feature_extraction import FeatureBuffer, extract_model_representations
 from multitasking.feature_reduction import reduce_features
@@ -67,7 +68,17 @@ def compute_model_representation(
     # Determine the location of the feature reduction cache based on the relevant
     # config settings.
     feature_reduction_config_hash = config_hash(
-        config, ["fmri", "dataset", "feature_extraction", "feature_reduction"]
+        config,
+        [
+            "fmri",
+            "dataset",
+            "feature_extraction",
+            "feature_reduction",
+            # A cross-dataset run must not share a cache with a plain one. The
+            # per-split sample-ID check would catch a collision, but by raising
+            # rather than by using the right features.
+            TEST_SPLIT_CONFIG_KEY,
+        ],
     )
     feature_reduction_cache_path = (
         cache_path
@@ -154,9 +165,8 @@ def compute_model_representation(
                 reduced_features[layer].reshape(N, T, -1).squeeze()
             )
             LOGGER.info(
-                f"---dev-log--- squeezed red. features for {layer} shape: {
-                    reduced_features[layer].shape
-                    }"
+                f"---dev-log--- squeezed red. features for {layer} shape: "
+                f"{reduced_features[layer].shape}"
             )
         feature_reduction_cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_payload = dict(reduced_features)
