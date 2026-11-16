@@ -3,17 +3,11 @@
 
 For a given ROI x metric x main_outcome, figure 1 consists of 2 panels:
 1. Alignment patterns: brain-brain and model-brain alignment, for every model
-   that is statistically equivalent to the best model on the main outcome or
-   on the alignment-pattern similarity (APS).
+   equivalent to the best model on the main outcome or on APS.
 2. Score vs. APS: scatter plot with equivalence bands
 
-By default the taskonomy models take part in the alignment-pattern panel on
-the same terms as every other model: their pattern is drawn when they clear
-the equivalence bar, and not otherwise. Pass ``--taskonomy False`` to exclude
-them from that selection, which reproduces the behaviour this script had
-before the option existed. They are in the scatter panel and in the
-equivalence bands either way, since the best model on either axis is picked
-over all models upstream and may well be a taskonomy model.
+``--taskonomy False`` excludes taskonomy models from panel 1 (the previous
+behaviour); they stay in panel 2 either way.
 """
 
 import json
@@ -50,16 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 def set_aps_x_ticks(ax, step: float = 0.4, max_ticks: int = 6) -> None:
-    """Puts fixed x ticks every ``step`` on the APS axis, when that is legible.
-
-    :func:`set_ticks_0_1` lays ticks from the left limit up to 1 with no regard
-    for how many that is, which suits an axis of Pearson correlations: those
-    span about 1.2, so ``step=0.4`` yields three or four ticks. The APS axis is
-    whatever the similarity metric produces, and a negated-MSE axis is not on
-    that scale -- it can span 8 (twenty ticks, a black smear of overlapping
-    labels) or 0.3 (one tick). Outside the legible band the fixed ticks are
-    dropped for matplotlib's adaptive locator, capped at a few ticks and
-    formatted to three significant digits so the labels stay short.
+    """Puts x ticks every ``step`` on the APS axis, or adaptive ones if illegible.
 
     Args:
         ax: Axis whose x ticks to set.
@@ -112,12 +97,7 @@ def set_aps_x_ticks(ax, step: float = 0.4, max_ticks: int = 6) -> None:
     type=bool,
     default=True,
     show_default=True,
-    help=(
-        "Whether the taskonomy models can appear in the alignment-pattern "
-        "panel, i.e. whether their pattern is drawn when they are equivalent "
-        "to the best model. They are in the scatter panel and in the "
-        "equivalence bands regardless of this flag."
-    ),
+    help="Whether taskonomy models can appear in the alignment-pattern panel.",
 )
 @click.option(
     "--plot_path",
@@ -199,12 +179,8 @@ def main(dataset, metric, roi, main_outcome, split, taskonomy, plot_path,
     with open(project_root / "model_legend_mapping.json") as f:
         model_legend_mapping = json.load(f)
 
-    # Filter data for panels. ``all_models_df`` keeps the taskonomy models and
-    # is what the scatter panel and the equivalence bands are built from: the
-    # best model on the main outcome and on APS is picked over all models in
-    # aggregate_results, so it may well be a taskonomy model and has to be
-    # present here. ``panel_1_df`` is the subset whose alignment patterns are
-    # drawn, which is where --taskonomy applies.
+    # all_models_df feeds the scatter panel and equivalence bands (the best
+    # model may be a taskonomy model); --taskonomy only filters panel_1_df.
     all_models_df = subject_avg_df[
         (subject_avg_df["split"] == split)
         & (subject_avg_df["metric"] == metric)
@@ -266,14 +242,8 @@ def main(dataset, metric, roi, main_outcome, split, taskonomy, plot_path,
         "predictor"
     ].unique()
 
-    # The best model on each axis is drawn whether or not it clears the
-    # equivalence bar. For the main outcome that is already guaranteed -- the
-    # best model's mean lies inside its own bootstrap CI, so it is always in
-    # ``relevant_predictors``. For the APS axis it is not: a model can top the
-    # alignment-pattern similarity while scoring well below the best model,
-    # which puts it in ``aps_predictors`` only, and the loop below draws
-    # nothing for those. Without this it vanishes from the panel -- on NSD
-    # under MSE that was 26 of 38 (ROI x metric) panels.
+    # Always draw the best model on each axis; the best-on-APS model is
+    # otherwise skipped when it is not equivalent on the main outcome.
     best_predictors = set(
         roi_df.query("is_best_model or is_best_model_aps")["predictor"].unique()
     )
@@ -340,9 +310,7 @@ def main(dataset, metric, roi, main_outcome, split, taskonomy, plot_path,
         zorder=0,
     )
 
-    # dict.fromkeys de-duplicates while keeping the order: a predictor that is
-    # equivalent on both axes appears in both lists and would otherwise be
-    # drawn (and legended) twice.
+    # De-duplicate, keeping order (a predictor can be in both lists).
     all_predictors = list(
         dict.fromkeys(np.concatenate([relevant_predictors, aps_predictors]))
     )
@@ -350,11 +318,9 @@ def main(dataset, metric, roi, main_outcome, split, taskonomy, plot_path,
     seen_labels: set[str] = set()
 
     def legend_label(model: str) -> str:
-        """Returns the legend entry for a model, once per distinct entry.
+        """Returns a model's legend label, or "_nolegend_" if already used.
 
-        All taskonomy models share one colour, so they share one entry too;
-        repeats become "_nolegend_" so the whole family does not flood the
-        legend.
+        Taskonomy models share one label.
 
         Args:
             model: Model name, e.g. ``"taskonomy/normal"``.
@@ -379,9 +345,7 @@ def main(dataset, metric, roi, main_outcome, split, taskonomy, plot_path,
     )
     for predictor in all_predictors:
         model = predictor.split("__")[0]
-        # legend_label spends an entry the first time it is asked for one, so
-        # it is called inside the branches: asking for a predictor that is
-        # then not drawn would suppress that model's later legend entry.
+        # Call legend_label only for predictors that are drawn: it uses up the label.
         if (predictor in aps_predictors) and (predictor in relevant_predictors):
             axes[0].plot(
                 range(len(rois)),
@@ -400,9 +364,7 @@ def main(dataset, metric, roi, main_outcome, split, taskonomy, plot_path,
                 alpha=0.3, zorder=0,
             )
         elif predictor in best_predictors:
-            # Best on APS but not equivalent on the main outcome. Dash-dot for
-            # "selected on APS", faint for "not score-equivalent", matching
-            # how the two branches above use linestyle and alpha.
+            # Best on APS, not equivalent on the main outcome.
             axes[0].plot(
                 range(len(rois)),
                 mb_aps[predictor].mean(axis=0),

@@ -38,9 +38,7 @@ print(' '.join(get_rois('$DATASET', exclude=parse_roi_names('$EXCLUDE_ROIS'))))
 # Metrics: rsa, linear_predictivity
 METRICS="rsa linear_predictivity"
 
-# Whether to draw the taskonomy models' alignment patterns. Space-separated,
-# so TASKONOMY="True False" writes both variants of every figure (the file
-# name carries the value, so they do not overwrite each other).
+# Draw taskonomy alignment patterns? TASKONOMY="True False" writes both variants.
 TASKONOMY="${TASKONOMY:-True}"
 
 # Main outcomes: score, score_norm_upper, score_norm_lower
