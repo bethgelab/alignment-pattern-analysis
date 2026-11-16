@@ -188,6 +188,11 @@ class LinearPredictivity(Metric):
     ) -> tuple[float, int]:
         """Per-voxel Pearson r of the fold-averaged prediction.
 
+        Fold-averaged: each of the ``num_folds`` ridge models fitted in
+        ``__call__`` predicts the test samples, and the predictions are
+        averaged. Ridge is linear, so this equals predicting with the averaged
+        weights.
+
         Parameters:
             test_features1: Feature matrix of shape (n_samples, n_features_1).
             test_features2: Target matrix of shape (n_samples, n_voxels).
