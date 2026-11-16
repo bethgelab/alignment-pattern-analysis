@@ -315,6 +315,9 @@ def main(dataset: str,
         full_df, pairwise_subject_df, "lower noise ceiling"
     )
 
+    # check_stimulus_sets_align has just verified that both sides agree on the
+    # stimulus set per split, so the ceiling's copy is redundant; keeping it
+    # would turn full_df's column into stimulus_set_x / stimulus_set_y.
     full_df = full_df.merge(
         noise_ceiling_df.drop(columns=[STIMULUS_SET_COLUMN], errors="ignore"),
         on=["roi", "split", "subject", "metric"],

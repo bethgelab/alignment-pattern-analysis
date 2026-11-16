@@ -90,7 +90,7 @@ class NSDSynthetic(NSD):
         roi_beta_cache: str | os.PathLike | None = None,
         resolution: int | tuple[int, int] | None = None,
         roi_groups: dict[str, list[str]] | None = None,
-        ncsnr_source: NcsnrSource = "nsd_synthetic",
+        ncsnr_source: NcsnrSource = "nsd_core",
         nsd_core_fmri_path: str | os.PathLike | None = None,
     ):
         """Initializes the NSD-synthetic dataset.
@@ -113,11 +113,16 @@ class NSDSynthetic(NSD):
                 ``python -m multitasking.nsd_synthetic.prepare_betas``.
             resolution: Resize stimuli to this size.
             roi_groups: Optional ``{group_name: [roi names]}`` to merge.
-            ncsnr_source: "nsd_synthetic" for the map computed from this
-                dataset's own repetitions, "nsd_core" to reuse NSD-core's.
-            nsd_core_fmri_path: NSD-core root. Required only when
-                ``ncsnr_source`` is "nsd_core", since ``fmri_path`` then points
-                at the wrong tree.
+            ncsnr_source: Which NCSNR map ``load_voxel_consistency`` returns:
+                "nsd_core" (the default) reuses NSD-core's, "nsd_synthetic" the
+                map computed from this dataset's own repetitions. Neither the
+                benchmark nor the inter-subject path reads it: both build their
+                voxel mask from the *train* dataset, which is NSD-core. Choosing
+                "nsd_synthetic" therefore logs a warning, since anything that
+                did read it would use a different voxel set than those paths.
+            nsd_core_fmri_path: NSD-core root. Needed by
+                ``load_voxel_consistency`` when ``ncsnr_source`` is "nsd_core",
+                since ``fmri_path`` points at the NSD-synthetic tree.
 
         Raises:
             ValueError: If ``split`` is not "test", if ``ncsnr_source`` is
@@ -135,10 +140,13 @@ class NSDSynthetic(NSD):
             if nsd_core_fmri_path is not None
             else None
         )
-        if ncsnr_source == "nsd_core" and self.nsd_core_fmri_path is None:
-            raise ValueError(
-                "ncsnr_source='nsd_core' needs nsd_core_fmri_path, since "
-                "fmri_path points at the NSD-synthetic tree."
+        if ncsnr_source == "nsd_synthetic":
+            LOGGER.warning(
+                "ncsnr_source='nsd_synthetic': load_voxel_consistency will "
+                "return NSD-synthetic's own NCSNR. The benchmark and "
+                "inter-subject voxel masks are built from the train split "
+                "(NSD-core) regardless, so anything reading this map works on "
+                "a different voxel set than they do."
             )
 
         # Read before super().__init__, which calls _select_stimulus_ids.
@@ -268,10 +276,9 @@ class NSDSynthetic(NSD):
     def load_voxel_consistency(self, subject_id: str) -> dict[str, np.ndarray]:
         """Loads a subject's per-ROI noise ceiling SNR.
 
-        Note that on the benchmark path this is not what masks the voxels: the
-        mask is built from the *train* dataset, which in the intended
-        cross-dataset configuration is NSD-core. This is consulted by the
-        inter-subject path and by anything normalising by a noise ceiling.
+        Note that neither the benchmark nor the inter-subject path calls this
+        on the test split: both build their voxel mask from the *train*
+        dataset, which in the intended cross-dataset configuration is NSD-core.
 
         Args:
             subject_id: The subject whose reliability values to load.
@@ -280,7 +287,12 @@ class NSDSynthetic(NSD):
             ``{roi_name: array}`` of per-vertex NCSNR.
         """
         if self.ncsnr_source == "nsd_core":
-            assert self.nsd_core_fmri_path is not None  # checked in __init__
+            if self.nsd_core_fmri_path is None:
+                raise ValueError(
+                    "ncsnr_source='nsd_core' needs nsd_core_fmri_path (config "
+                    "key fmri.nsd_core_path), since fmri_path points at the "
+                    "NSD-synthetic tree."
+                )
             ncsnr = load_nsd_ncsnr(
                 self.nsd_core_fmri_path,
                 subject_id,

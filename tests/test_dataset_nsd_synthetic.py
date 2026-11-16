@@ -269,15 +269,26 @@ def test_tampered_trial_counts_are_caught(fake_synthetic):
 # --- noise ceiling ----------------------------------------------------------
 
 
-def test_ncsnr_source_selects_between_the_two_maps(fake_synthetic):
-    synthetic = _build(fake_synthetic).load_voxel_consistency("subjA")
+def test_ncsnr_source_defaults_to_core_and_warns_on_synthetic(
+    fake_synthetic, caplog
+):
+    with caplog.at_level("WARNING"):
+        default = _build(fake_synthetic)
+    assert default.ncsnr_source == "nsd_core"
+    assert "ncsnr_source" not in caplog.text
+    # Without NSD-core's root the default can still build, but not load.
+    with pytest.raises(ValueError, match="nsd_core_fmri_path"):
+        default.load_voxel_consistency("subjA")
+
     core = _build(
-        fake_synthetic,
-        ncsnr_source="nsd_core",
-        nsd_core_fmri_path=fake_synthetic["nsd_core_fmri_path"],
+        fake_synthetic, nsd_core_fmri_path=fake_synthetic["nsd_core_fmri_path"]
     ).load_voxel_consistency("subjA")
+    with caplog.at_level("WARNING"):
+        synthetic = _build(
+            fake_synthetic, ncsnr_source="nsd_synthetic"
+        ).load_voxel_consistency("subjA")
+    assert "ncsnr_source='nsd_synthetic'" in caplog.text
     # The fixture writes the core map at half the scale.
-    assert not np.allclose(synthetic["V1"], core["V1"])
     assert np.allclose(core["V1"], synthetic["V1"] * 0.5)
 
 

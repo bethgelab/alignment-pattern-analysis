@@ -116,13 +116,11 @@ test_split:
   fmri:
     path: /mnt/lustre/work/bethge/bkr578/data/NSD-synthetic/raw
     roi_beta_cache: /mnt/lustre/work/bethge/bkr578/data/NSD-synthetic/cache
-    # NSD publishes no noise ceiling for NSD-synthetic, so prepare_betas
-    # computes one from its 2-10 repetitions per image. Set this to nsd_core to
-    # reuse NSD-core's map instead.
-    #
-    # Note that on the benchmark path neither choice affects which voxels are
-    # kept: that mask is built from the *train* dataset, so it is NSD-core's
-    # either way. This governs load_voxel_consistency, which the inter-subject
-    # path and the noise-ceiling normalisation in the analysis layer use.
-    ncsnr_source: nsd_synthetic
+    # Which NCSNR map NSDSynthetic.load_voxel_consistency returns. Neither the
+    # benchmark nor the inter-subject path reads it: both build the voxel mask
+    # from the *train* dataset, so it is NSD-core's either way. nsd_core keeps
+    # this consistent with that mask. nsd_synthetic (the map prepare_betas
+    # computes from the 2-10 repetitions per image, since NSD publishes none)
+    # is allowed but logs a warning.
+    ncsnr_source: nsd_core
     nsd_core_path: /mnt/lustre/work/bethge/bkr857/datasets/NSD

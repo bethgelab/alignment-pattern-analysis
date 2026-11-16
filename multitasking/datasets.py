@@ -669,7 +669,7 @@ def build_dataset(
             roi_beta_cache=config["fmri"].get("roi_beta_cache"),
             resolution=config["dataset"].get("resolution", None),
             roi_groups=config["fmri"].get("roi_groups"),
-            ncsnr_source=config["fmri"].get("ncsnr_source", "nsd_synthetic"),
+            ncsnr_source=config["fmri"].get("ncsnr_source", "nsd_core"),
             nsd_core_fmri_path=config["fmri"].get("nsd_core_path"),
         )
 
