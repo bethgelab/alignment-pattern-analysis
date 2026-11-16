@@ -496,6 +496,9 @@ def compute_linear_predictivity(
     default_stimulus_set = str(config["dataset"].get("name", "bold_moments"))
 
     scores: list[dict[str, Any]] = []
+    # Pearson-r rows are appended after all R^2 rows so the latter keep their
+    # content and order.
+    r_scores: list[dict[str, Any]] = []
 
     ridgecv_path = output_path / "ridgecv"
     ridgecv_path.mkdir(parents=True, exist_ok=True)
@@ -509,13 +512,22 @@ def compute_linear_predictivity(
                     #  For train, fit the model
                     score, details = linear_predictivity(features1, features2)
                     train_score = score
+                    # Out-of-fold per-voxel r (NaN on the early-NaN return).
+                    r_score = details.get("train_r", np.nan)
+                    r_n_invalid = details.get("train_r_n_invalid", 0)
                 else:
                     #  For test, evaluate the model
                     if np.isnan(score):
                         score = np.nan # e.g. if one featuremap has 0 feature dims
+                        r_score, r_n_invalid = np.nan, 0
                     else:
                         score = linear_predictivity.evaluate_models( # type: ignore
                                 features1, features2
+                        )
+                        r_score, r_n_invalid = (
+                            linear_predictivity.evaluate_fold_averaged_r(
+                                features1, features2
+                            )
                         )
                     test_scores = score
 
@@ -551,6 +563,27 @@ def compute_linear_predictivity(
 
                     }
                 )
+                if r_n_invalid:
+                    LOGGER.warning(
+                        f"{split}_{layer}_{roi}: {r_n_invalid} voxels with "
+                        "undefined Pearson r (zero variance) excluded."
+                    )
+                r_scores.append(
+                    {
+                        "model": config["feature_extraction"]["model"],
+                        "layer": layer,
+                        "roi": roi,
+                        "split": split,
+                        "stimulus_set": stimulus_sets.get(
+                            split, default_stimulus_set
+                        ),
+                        "subject": subject_id,
+                        "metric": "linear_predictivity_r",
+                        "n_features_1_model": features1.shape[-1],
+                        "n_features_2_brain": features2.shape[-1],
+                        "score": r_score,
+                    }
+                )
 
             # Bundle model + metadata
             package = {
@@ -569,7 +602,7 @@ def compute_linear_predictivity(
         output_path / "scoresheets" / f"scores_linear_predictivity_{subject_id}.csv"
     )
     scores_path.parent.mkdir(parents=True, exist_ok=True)
-    scores_df = pd.DataFrame(scores)
+    scores_df = pd.DataFrame(scores + r_scores)
     scores_df.to_csv(scores_path, index=False)
 
     LOGGER.info(f"Computing linear predictivity completed.\n{scores_df}")
