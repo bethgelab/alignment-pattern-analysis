@@ -41,12 +41,23 @@ fi
 
 mkdir -p "$SCRATCH/home"
 
+# Optional persistent torch.hub cache (hub repos and checkpoints). Without it the
+# cache lives in the container home under $SCRATCH, which is node-local on most
+# clusters, so every job re-downloads the weights (5-16 GB per V-JEPA 2 model).
+# The directory must be visible in the container, e.g. via MULTITASKING_BIND_PATHS.
+env_args=()
+if [ -n "${MULTITASKING_TORCH_HOME:-}" ]; then
+    mkdir -p "$MULTITASKING_TORCH_HOME"
+    env_args+=(--env "TORCH_HOME=$MULTITASKING_TORCH_HOME")
+fi
+
 srun singularity exec --nv \
     --home "$SCRATCH/home" \
     --pwd "$(pwd)" \
     --bind "$SCRATCH" \
     ${bind_args[@]+"${bind_args[@]}"} \
     --env PYTHONPATH=multitasking \
+    ${env_args[@]+"${env_args[@]}"} \
     "$CONTAINER" \
         python -m multitasking.benchmark \
             --config "$CONFIG_PATH" \
