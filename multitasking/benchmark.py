@@ -512,7 +512,6 @@ def compute_linear_predictivity(
                     #  For train, fit the model
                     score, details = linear_predictivity(features1, features2)
                     train_score = score
-                    # Out-of-fold per-voxel r (NaN on the early-NaN return).
                     r_score = details.get("train_r", np.nan)
                     r_n_invalid = details.get("train_r_n_invalid", 0)
                 else:
@@ -524,11 +523,12 @@ def compute_linear_predictivity(
                         score = linear_predictivity.evaluate_models( # type: ignore
                                 features1, features2
                         )
-                        r_score, r_n_invalid = (
-                            linear_predictivity.evaluate_fold_averaged_r(
+                        r_per_model, r_n_invalid = (
+                            linear_predictivity.evaluate_models_r(
                                 features1, features2
                             )
                         )
+                        r_score = float(np.nanmean(r_per_model))
                     test_scores = score
 
                 scores.append(

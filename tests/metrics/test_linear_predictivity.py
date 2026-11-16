@@ -188,7 +188,7 @@ def test_evaluate_models_output_types_and_length(rng: np.random.Generator):
     assert all(isinstance(v, float) for v in scores)
 
 
-def test_fold_averaged_r_matches_scipy_and_ignores_affine_target_shift(
+def test_r_per_model_matches_scipy_and_ignores_affine_target_shift(
     rng: np.random.Generator,
 ):
     from scipy import stats
@@ -203,17 +203,21 @@ def test_fold_averaged_r_matches_scipy_and_ignores_affine_target_shift(
     x_test = rng.normal(size=(40, 20))
     y_test = x_test @ w + rng.normal(size=(40, 6))
 
-    r, n_invalid = metric.evaluate_fold_averaged_r(x_test, y_test)
+    rs, n_invalid = metric.evaluate_models_r(x_test, y_test)
 
     xn = (x_test - metric.x_mean_train) / metric.x_sd_train
-    pred = np.mean([m.predict(xn) for m in metric.models], axis=0)
     yn = (y_test - metric.y_mean_train) / metric.y_sd_train
-    expected = np.mean([stats.pearsonr(pred[:, v], yn[:, v])[0] for v in range(6)])
     assert n_invalid == 0
-    assert math.isclose(r, expected, abs_tol=1e-6)
+    assert len(rs) == len(metric.models)
+    for r, m in zip(rs, metric.models, strict=True):
+        pred = m.predict(xn)
+        expected = np.mean(
+            [stats.pearsonr(pred[:, v], yn[:, v])[0] for v in range(6)]
+        )
+        assert math.isclose(r, expected, abs_tol=1e-6)
 
-    r_affine, _ = metric.evaluate_fold_averaged_r(x_test, 3.0 * y_test + 5.0)
-    assert math.isclose(r_affine, r, abs_tol=1e-5)
+    rs_affine, _ = metric.evaluate_models_r(x_test, 3.0 * y_test + 5.0)
+    assert np.allclose(rs_affine, rs, atol=1e-5)
     r2 = np.mean(metric.evaluate_models(x_test, y_test))
     r2_affine = np.mean(metric.evaluate_models(x_test, 3.0 * y_test + 5.0))
     assert not math.isclose(r2, r2_affine, abs_tol=1e-3)
@@ -258,3 +262,11 @@ def test_linear_predictivity_r_row_leaves_r2_rows_unchanged(
                         rel_tol=1e-9)
     assert math.isclose(r2[r2["split"] == "test"]["score"].item(),
                         float(np.nanmean(test_scores)), rel_tol=1e-9)
+
+    # r follows the same per-fold-then-average procedure as R^2.
+    _, details = LinearPredictivity(seed=1)(model_rep["train_L"], brain["train_R"])
+    test_rs, _ = metric.evaluate_models_r(model_rep["test_L"], brain["test_R"])
+    assert math.isclose(r[r["split"] == "train"]["score"].item(),
+                        details["train_r"], rel_tol=1e-9)
+    assert math.isclose(r[r["split"] == "test"]["score"].item(),
+                        float(np.nanmean(test_rs)), rel_tol=1e-9)
