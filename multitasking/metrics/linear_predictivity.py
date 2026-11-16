@@ -51,7 +51,7 @@ class LinearPredictivity(Metric):
     The parameter alpha is fitted on the training data for each fold, using efficient
     leave-one-out cross-validation (see `sklearn.linear_model.RidgeCV`). This means,
     that a different value could be used for each fold. This is in line with the method
-    described in [Tang et al., 2024](https://www.biorxiv.org/content/10.1101/2025.07.22.664908v1).
+    described in [Tang et al., 2025](https://www.biorxiv.org/content/10.1101/2025.07.22.664908v1).
 
     A voxel-mean Pearson r, which ignores offset and scale mismatches, is computed
     exactly like R^2: per fold model, then averaged over folds.
