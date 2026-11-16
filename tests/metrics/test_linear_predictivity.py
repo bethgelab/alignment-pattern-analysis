@@ -186,3 +186,87 @@ def test_evaluate_models_output_types_and_length(rng: np.random.Generator):
     assert isinstance(scores, list)
     assert len(scores) == 4
     assert all(isinstance(v, float) for v in scores)
+
+
+def test_r_per_model_matches_scipy_and_ignores_affine_target_shift(
+    rng: np.random.Generator,
+):
+    from scipy import stats
+
+    from multitasking.metrics.linear_predictivity import mean_voxel_pearson_r
+
+    x = rng.normal(size=(80, 20))
+    w = rng.normal(size=(20, 6))
+    y = x @ w + rng.normal(size=(80, 6))
+    metric = LinearPredictivity()
+    metric(x, y)
+    x_test = rng.normal(size=(40, 20))
+    y_test = x_test @ w + rng.normal(size=(40, 6))
+
+    rs, n_invalid = metric.evaluate_models_r(x_test, y_test)
+
+    xn = (x_test - metric.x_mean_train) / metric.x_sd_train
+    yn = (y_test - metric.y_mean_train) / metric.y_sd_train
+    assert n_invalid == 0
+    assert len(rs) == len(metric.models)
+    for r, m in zip(rs, metric.models, strict=True):
+        pred = m.predict(xn)
+        expected = np.mean(
+            [stats.pearsonr(pred[:, v], yn[:, v])[0] for v in range(6)]
+        )
+        assert math.isclose(r, expected, abs_tol=1e-6)
+
+    rs_affine, _ = metric.evaluate_models_r(x_test, 3.0 * y_test + 5.0)
+    assert np.allclose(rs_affine, rs, atol=1e-5)
+    r2 = np.mean(metric.evaluate_models(x_test, y_test))
+    r2_affine = np.mean(metric.evaluate_models(x_test, 3.0 * y_test + 5.0))
+    assert not math.isclose(r2, r2_affine, abs_tol=1e-3)
+
+    # Constant voxels are excluded and counted.
+    y_const = y_test.copy()
+    y_const[:, 0] = 1.0
+    assert mean_voxel_pearson_r(pred, y_const)[1] == 1
+
+
+def test_linear_predictivity_r_row_leaves_r2_rows_unchanged(
+    rng: np.random.Generator, tmp_path
+):
+    from benedict import benedict
+
+    from multitasking.benchmark import compute_linear_predictivity
+
+    config = benedict({
+        "linear_predictivity": {"enabled": True, "seed": 1},
+        "dataset": {"name": "t"},
+        "feature_extraction": {"model": "m"},
+    })
+    model_rep = {"train_L": rng.normal(size=(60, 15)),
+                 "test_L": rng.normal(size=(30, 15))}
+    brain = {"train_R": rng.normal(size=(60, 4)),
+             "test_R": rng.normal(size=(30, 4))}
+    compute_linear_predictivity(
+        model_rep, brain, ["L"], ["R"], ["train", "test"], config,
+        output_path=tmp_path, subject_id="s1")
+
+    import pandas as pd
+    df = pd.read_csv(tmp_path / "scoresheets" / "scores_linear_predictivity_s1.csv")
+    r2 = df[df["metric"] == "linear_predictivity"]
+    r = df[df["metric"] == "linear_predictivity_r"]
+    assert len(r2) == 2 and len(r) == 2
+    assert list(df["metric"][:2]) == ["linear_predictivity"] * 2
+
+    metric = LinearPredictivity(seed=1)
+    train_score, _ = metric(model_rep["train_L"], brain["train_R"])
+    test_scores = metric.evaluate_models(model_rep["test_L"], brain["test_R"])
+    assert math.isclose(r2[r2["split"] == "train"]["score"].item(), train_score,
+                        rel_tol=1e-9)
+    assert math.isclose(r2[r2["split"] == "test"]["score"].item(),
+                        float(np.nanmean(test_scores)), rel_tol=1e-9)
+
+    # r follows the same per-fold-then-average procedure as R^2.
+    _, details = LinearPredictivity(seed=1)(model_rep["train_L"], brain["train_R"])
+    test_rs, _ = metric.evaluate_models_r(model_rep["test_L"], brain["test_R"])
+    assert math.isclose(r[r["split"] == "train"]["score"].item(),
+                        details["train_r"], rel_tol=1e-9)
+    assert math.isclose(r[r["split"] == "test"]["score"].item(),
+                        float(np.nanmean(test_rs)), rel_tol=1e-9)

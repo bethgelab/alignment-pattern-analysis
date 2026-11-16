@@ -1,6 +1,5 @@
 """Linear predictivity metric."""
 
-import re
 from typing import Any
 
 import numpy as np
@@ -9,6 +8,37 @@ from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import KFold
 
 from multitasking.metrics.base import Metric
+
+
+def mean_voxel_pearson_r(
+    prediction: npt.ArrayLike, target: npt.ArrayLike
+) -> tuple[float, int]:
+    """Mean over voxels (columns) of the Pearson r between prediction and target.
+
+    Voxels with zero variance in the prediction or the target have an undefined
+    r; they are excluded from the mean (nanmean) and counted.
+
+    Parameters:
+        prediction: Array of shape (n_samples, n_voxels).
+        target: Array of shape (n_samples, n_voxels).
+
+    Returns:
+        The mean r (NaN if no voxel has a defined r) and the number of voxels
+        with an undefined r.
+    """
+    p = np.asarray(prediction, dtype=np.float64)
+    t = np.asarray(target, dtype=np.float64)
+    p = p - p.mean(axis=0)
+    t = t - t.mean(axis=0)
+    pp = (p * p).sum(axis=0)
+    tt = (t * t).sum(axis=0)
+    valid = (pp > 0) & (tt > 0)
+    r = np.full(p.shape[1], np.nan)
+    r[valid] = (p * t).sum(axis=0)[valid] / np.sqrt(pp[valid] * tt[valid])
+    n_invalid = int((~valid).sum())
+    if n_invalid == len(r):
+        return float("nan"), n_invalid
+    return float(np.nanmean(r)), n_invalid
 
 
 class LinearPredictivity(Metric):
@@ -21,7 +51,10 @@ class LinearPredictivity(Metric):
     The parameter alpha is fitted on the training data for each fold, using efficient
     leave-one-out cross-validation (see `sklearn.linear_model.RidgeCV`). This means,
     that a different value could be used for each fold. This is in line with the method
-    described in [Tang et al., 2024](https://www.biorxiv.org/content/10.1101/2025.07.22.664908v1).
+    described in [Tang et al., 2025](https://www.biorxiv.org/content/10.1101/2025.07.22.664908v1).
+
+    A voxel-mean Pearson r, which ignores offset and scale mismatches, is computed
+    exactly like R^2: per fold model, then averaged over folds.
     """
 
     def __init__(self, normalize: bool = True, num_folds: int = 5, seed: int = 1):
@@ -74,6 +107,8 @@ class LinearPredictivity(Metric):
 
         scores = []
         train_scores = []
+        r_scores = []
+        r_n_invalid = 0
 
         ridgecv_val_mse = []
         train_mse = []
@@ -93,7 +128,7 @@ class LinearPredictivity(Metric):
             try:
                 model.fit(x_train, y_train)
             except ValueError as error:
-                if re.match(r"Input (X|y) contains NaN.", str(error)):
+                if "contains NaN" in str(error):
                     return np.nan, {"models": None,
                                     "alphas": [],
                                     "train_scores": [],
@@ -110,6 +145,9 @@ class LinearPredictivity(Metric):
                 raise error
 
             score = model.score(x_test, y_test)
+            r, n_invalid = mean_voxel_pearson_r(model.predict(x_test), y_test)
+            r_scores.append(r * len(test_index))
+            r_n_invalid = max(r_n_invalid, n_invalid)
             score_train = model.score(x_train, y_train)
 
             scores.append(score * len(test_index))
@@ -134,7 +172,48 @@ class LinearPredictivity(Metric):
             "ridgecv_val_mse": ridgecv_val_mse,
             "train_mse": train_mse,
             "test_mse": test_mse,
+            "train_r": np.sum(r_scores) / len(x),
+            "train_r_n_invalid": r_n_invalid,
         }
+
+    def evaluate_models_r(
+        self, test_features1: npt.ArrayLike, test_features2: npt.ArrayLike
+    ) -> tuple[list[float], int]:
+        """Voxel-mean Pearson r of each trained model, like `evaluate_models`.
+
+        Parameters:
+            test_features1: Feature matrix of shape (n_samples, n_features_1).
+            test_features2: Target matrix of shape (n_samples, n_voxels).
+
+        Returns:
+            One r per model (NaN on NaN input), and the largest number of voxels
+            with undefined r in any model (see `mean_voxel_pearson_r`).
+
+        Raises:
+            RuntimeError: If no trained models are found.
+        """
+        if not self.models:
+            raise RuntimeError(
+                "No trained models found. Please fit the model before evaluation."
+            )
+        x = np.asarray(test_features1, dtype=np.float32)
+        y = np.asarray(test_features2, dtype=np.float32)
+        if self.normalize:
+            x = (x - self.x_mean_train) / self.x_sd_train
+            y = (y - self.y_mean_train) / self.y_sd_train
+        scores = []
+        n_invalid = 0
+        for m in self.models:
+            try:
+                r, n = mean_voxel_pearson_r(m.predict(x), y)
+            except ValueError as error:
+                if "contains NaN" in str(error):
+                    r, n = float("nan"), 0
+                else:
+                    raise
+            scores.append(r)
+            n_invalid = max(n_invalid, n)
+        return scores, n_invalid
 
     def evaluate_models(
         self, test_features1: npt.ArrayLike, test_features2: npt.ArrayLike
@@ -170,7 +249,7 @@ class LinearPredictivity(Metric):
             try:
                 score = m.score(x, y)
             except ValueError as error:
-                if re.match(r"Input contains NaN.", str(error)):
+                if "contains NaN" in str(error):
                     score = np.nan
                 else:
                     raise error
