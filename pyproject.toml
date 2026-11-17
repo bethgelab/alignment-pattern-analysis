@@ -98,5 +98,16 @@ lint.pydocstyle.convention = "google"
 exclude = ["_extern", "multitasking/plot_creation/**", "multitasking/analyses/alignment_pattern.py"]
 
 
+[tool.mypy]
+# tasks/*/launch.py share a basename; map files to modules by path instead.
+explicit_package_bases = true
+ignore_missing_imports = true
+exclude = ["^multitasking/plot_creation/", "^multitasking/analyses/alignment_pattern\\.py$"]
+
+[[tool.mypy.overrides]]
+module = "multitasking.models._extern.*"
+ignore_errors = true
+
+
 [tool.setuptools]
 packages = ["multitasking"]

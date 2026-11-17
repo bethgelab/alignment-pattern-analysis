@@ -83,7 +83,7 @@ def test_image_model_raises_error_for_invalid_postprocessed_feature_shapes(
         def postprocess(
             self,
             layer: str,
-            video_shape: tuple[int, int, int, int, int],
+            video_shape: torch.Size,
             feature: torch.Tensor,
         ) -> torch.Tensor:
             return torch.randn(*postprocessed_feature_shape)
