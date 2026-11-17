@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import warnings
 from functools import partial
 from math import ceil
 from pathlib import Path
@@ -24,7 +25,6 @@ from mmaction.datasets.transforms.loading import (
 from mmaction.datasets.transforms.processing import CenterCrop, Resize, ThreeCrop
 from mmengine.dataset.base_dataset import Compose as MMECompose
 from mmengine.dataset.utils import pseudo_collate
-from net2brain.architectures.netsetbase import NetSetBase
 
 from .base import Model
 
@@ -278,10 +278,27 @@ def preprocess_mmaction(
     return video
 
 
+def _select_layers(model: torch.nn.Module, layers: Sequence[str]) -> list[str]:
+    """Drops requested layers the model does not have, with a warning.
+
+    Same behaviour as net2brain's `NetSetBase.select_model_layers` for a list.
+    """
+    available = set(tx.list_module_names(model))
+    valid = [layer for layer in layers if layer in available and layer != ""]
+    invalid = set(layers) - set(valid)
+    if invalid:
+        warnings.warn(
+            f"Some layers are not present in the model and will not be extracted: "
+            f"{invalid}.",
+            stacklevel=2,
+        )
+    return valid
+
+
 # Adapted from:
 # https://github.com/SergeantChris/hundred_models_brains/blob/5e802ae5e368a1a30940e6b175e47704a3061419/repralign/models/custom_extraction_functions.py#L85-L118
 def extract_mmaction(preprocessed_data, layers_to_extract, model, stage):
-    layers = NetSetBase.select_model_layers(None, layers_to_extract, None, model)
+    layers = _select_layers(model, layers_to_extract)
     normalizer = model.data_preprocessor
     preprocessed_data = pseudo_collate([preprocessed_data])
 
