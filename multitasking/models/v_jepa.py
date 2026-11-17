@@ -11,6 +11,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 
+# torch.hub fetches the repo at this ref, not `main`. Upstream `main` has, since the
+# V-JEPA 2.1 commit 45d025f (2026-03-17), its checkpoint base URL set to a leftover
+# `http://localhost:8300`, so `pretrained=True` fails there. c2963a4 is the last commit
+# before that, i.e. the code the January 2026 runs used, and it downloads from
+# dl.fbaipublicfiles.com/vjepa2. Bumping it changes the model code being benchmarked.
+VJEPA2_HUB_REF = "facebookresearch/vjepa2:c2963a47433ecca0ad4f06ec28bcfa8cb5b5cefb"
+
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
 
@@ -47,8 +54,10 @@ class V_JEPA(Model):
                 example, "vjepa2_vit_large".
         """
         super().__init__(f"v_jepa/{name}")
-        encoder, projector = torch.hub.load('facebookresearch/vjepa2', name,
-                                             pretrained=True)
+        # skip_validation: torch.hub's fork check only accepts branch/tag heads, so it
+        # rejects any pinned commit. c2963a4 is on the upstream repo itself.
+        encoder, projector = torch.hub.load(VJEPA2_HUB_REF, name, pretrained=True,
+                                             skip_validation=True, trust_repo=True)
         self.encoder = encoder
         self.projector = projector
         # register encoder and projector as submodules without dot in names

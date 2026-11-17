@@ -221,6 +221,7 @@ and to the portable `#SBATCH` directives in the `run.sh` files.
 | `MULTITASKING_SLURM_ACCOUNT` | both launchers | Account to bill, passed as `--account`. |
 | `MULTITASKING_SLURM_EXTRA_ARGS` | both launchers | Any further `sbatch` flags, passed through verbatim, e.g. `--qos high --constraint a100`. |
 | `MULTITASKING_BIND_PATHS` | both `run.sh` | Comma-separated host paths to bind into the container, typically the filesystem holding the datasets. `$SCRATCH` is always bound and need not be listed. |
+| `MULTITASKING_TORCH_HOME` | benchmark `run.sh` | Persistent directory for the torch.hub cache (hub repos and downloaded checkpoints), passed into the container as `TORCH_HOME`. Unset, the cache sits in the container home under `$SCRATCH` and each job downloads the weights again. Must be visible in the container, e.g. listed in `MULTITASKING_BIND_PATHS`. |
 | `SCRATCH` | both `run.sh` | A writable directory for the container home and for intermediate results. Must be set. |
 
 For example:
