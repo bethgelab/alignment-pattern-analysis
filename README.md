@@ -98,6 +98,8 @@ We provide precomputed results from running the benchmarking pipeline. Alignment
 ```
 Run figure shell scripts (```run_figure_{x}.sh```) to recreate the paper figures.
 
+To test whether alignment-pattern similarity on NSD-core predicts NSD-synthetic scores beyond NSD-core scores (`METRIC=rsa|linear_predictivity|linear_predictivity_r`, default `rsa`; needs `uv sync --group stats` and `--main-outcome score` aggregations of both datasets): `ID_SCRATCH=... OOD_SCRATCH=... OUTPUT_DIR=... ./run_ood_mixed_model.sh`.
+
 ### NSD-synthetic
 
 [NSD-synthetic](https://www.nature.com/articles/s41467-026-69345-9) adds one scan session

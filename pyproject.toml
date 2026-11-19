@@ -63,6 +63,11 @@ dev = [
   "types-pyyaml==6.0.12.20250516",
 ]
 
+# Optional: only needed by multitasking.analysis_scripts.ood_mixed_model.
+stats = [
+  "statsmodels==0.15.0",
+]
+
 
 [tool.ruff]
 lint.select = ["B", "D", "E", "W", "F", "FIX", "I", "T20"]
