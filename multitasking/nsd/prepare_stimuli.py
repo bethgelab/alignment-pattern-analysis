@@ -41,6 +41,19 @@ MANIFEST_FILENAME = "manifest.csv"
 PROVENANCE_FILENAME = "provenance.json"
 
 
+def _source_path(coco_root: Path, row) -> Path:
+    return coco_image_path(coco_root, str(row.coco_split), int(row.coco_id))
+
+
+def _crop_box(row) -> tuple[float, float, float, float]:
+    return (
+        float(row.crop_top),
+        float(row.crop_bottom),
+        float(row.crop_left),
+        float(row.crop_right),
+    )
+
+
 def check_sources_exist(manifest: pd.DataFrame, coco_root: Path) -> None:
     """Checks that every source image is present before writing anything.
 
@@ -52,9 +65,9 @@ def check_sources_exist(manifest: pd.DataFrame, coco_root: Path) -> None:
         FileNotFoundError: If any source image is missing.
     """
     missing = [
-        str(coco_image_path(coco_root, row.coco_split, row.coco_id))
+        str(_source_path(coco_root, row))
         for row in manifest.itertuples()
-        if not coco_image_path(coco_root, row.coco_split, row.coco_id).exists()
+        if not _source_path(coco_root, row).exists()
     ]
     if missing:
         raise FileNotFoundError(
@@ -82,12 +95,12 @@ def check_crop_boxes(manifest: pd.DataFrame, coco_root: Path) -> None:
     for row in tqdm(
         manifest.itertuples(), total=len(manifest), desc="Checking crop boxes"
     ):
-        path = coco_image_path(coco_root, row.coco_split, row.coco_id)
+        path = _source_path(coco_root, row)
         with Image.open(path) as image:
             width, height = image.size
         try:
             crop_box_to_pixels(
-                (row.crop_top, row.crop_bottom, row.crop_left, row.crop_right),
+                _crop_box(row),
                 height,
                 width,
             )
@@ -183,8 +196,8 @@ def prepare_stimuli(
         target = images_dir / f"{row.stimulus_id:04d}.png"
         if overwrite or not target.exists():
             stimulus = reconstruct_stimulus(
-                coco_image_path(coco_root, row.coco_split, row.coco_id),
-                (row.crop_top, row.crop_bottom, row.crop_left, row.crop_right),
+                _source_path(coco_root, row),
+                _crop_box(row),
                 resolution=resolution,
             )
             stimulus.save(target, format="PNG")

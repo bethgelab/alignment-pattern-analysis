@@ -146,36 +146,29 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Links the container image into the job directory.
-
-    Inter-subject consistency never instantiates a model, so unlike the model
-    benchmark it needs only the mmflow base image. It is linked here as
-    container.sif, the filename submit_jobs passes to run.sh as $CONTAINER.
-
-    Args:
-        output_path: The job directory to link the container into.
+    """Links the container image into the job directory as container.sif.
 
     Raises:
-        FileNotFoundError: If the image is missing, naming where it is
-            expected.
+        FileNotFoundError: If singularity/multitasking.sif is missing.
     """
-    click.echo("Symlinking containers...")
-    source = PROJECT_ROOT / "singularity" / "multitasking_mmflow.sif"
+    click.echo("Symlinking container...")
+    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
     if not source.exists():
         raise FileNotFoundError(
             f"Container {source} not found. Build it from "
-            "singularity/container.def, or symlink an existing image to "
-            "that path."
+            "singularity/container.def (see README.md)."
         )
     os.symlink(source.resolve(), output_path / "container.sif")
 
 
 def prepare_code(output_path: Path):
-    """Copies the code for running the benchmark."""
+    """Copies the code, and the dependency spec it was launched with."""
     click.echo("Copying code...")
     source = PROJECT_ROOT / "multitasking"
     destination = output_path / "multitasking"
     shutil.copytree(source, destination)
+    for name in ("pyproject.toml", "uv.lock"):
+        shutil.copy(PROJECT_ROOT / name, output_path / name)
 
 
 def prepare_configs_leave_one_out_mean(output_path: Path, base_config: benedict):

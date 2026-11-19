@@ -4,35 +4,50 @@ This repository provides the code for the ICLR 2026 paper [Only Brains Align wit
 
 
 ## Preliminaries
-Setup a virtual environment and install the python package provided by this repository.
-Additionally to the dependencies listed in [pyproject.toml](pyproject.toml), you will
-need to install the `mmcv` and `mmaction2` for your GPU type, for example:
+
+Dependencies are locked in [uv.lock](uv.lock). With [uv](https://docs.astral.sh/uv/)
+installed, create the environment in `.venv`:
+
+```bash
+uv sync --extra all --group dev
+```
+
+Core dependencies cover the pipeline, analysis, plotting and dataset preparation. Each
+model provider's dependencies are an extra (`clip`, `timm`, `taskonomy`, `vggt`,
+`opt_cwm`, `mmaction2`), so `uv sync --group dev` alone suffices for analysis and NSD
+preparation. The `mmaction2` models additionally need `mmcv` and `mmaction2`, which are
+not in the lock: mmcv compiles CUDA ops against the installed torch, and mmaction2 needs
+an editable install. Their runtime dependencies are in the `mmaction2` extra, so install
+both without dependencies:
 
 ```bash
 # Building MMCV may take some time. Be patient.
-# This has to be done *after* torch and torchvision are installed. Otherwise, this
-# will install fine but complain about missing `mmcv._ext` later.
 MMCV_WITH_OPS=1 FORCE_CUDA="1" TORCH_CUDA_ARCH_LIST="Volta;Turing;Ampere" \
-    pip install git+https://github.com/open-mmlab/mmcv.git@v2.1.0
+    uv pip install --no-build-isolation --no-deps \
+    "mmcv @ git+https://github.com/open-mmlab/mmcv.git@v2.1.0"
 
-# We additionally need the base config files, so we clone the repository explicitely
-# and install the package from there.
-# Some source files related to DRN are not copied to site-packages which results in
-# an error. To fix this, we use an editable install.
-# See https://github.com/open-mmlab/mmaction2/issues/2714
+# The editable install keeps mmaction2's base configs and DRN sources, which are not
+# copied to site-packages (https://github.com/open-mmlab/mmaction2/issues/2714).
 git clone https://github.com/open-mmlab/mmaction2.git
-cd mmaction2
-git checkout v1.2.0
-pip install -e .
+git -C mmaction2 checkout v1.2.0
+uv pip install --no-build-isolation --no-deps -e ./mmaction2
 ```
 
-We provide a definition file for a singularity container that can be built using the
-command below. The [container.def](singularity/container.def) might be useful even when
-not using singularity, as it defines the exact steps used to set up the environment.
+The SLURM launchers run every job in a singularity container built from the same lock.
+Build it from the repository root:
 
 ```bash
-singularity build --fakeroot singularity/container.sif singularity/container.def
+singularity build --fakeroot singularity/multitasking.sif singularity/container.def
 ```
+
+The image holds the dependencies only, never the `multitasking` package: each launch
+copies `multitasking/`, `pyproject.toml` and `uv.lock` into the job directory, and
+`run.sh` fails a job that would import `multitasking` from anywhere else. Editing the
+repository after launching therefore never affects jobs in flight.
+
+The paper's results were computed with two earlier images (`multitasking_mmflow.sif`
+for all models except `mmaction2/*`, `multitasking_mmaction2.sif` for those), which
+were not built from a lock.
 
 Download the BOLDMoments dataset from https://github.com/blahner/BOLDMomentsDataset to the `datasets` directory. Specifically, use the download script for versionB/fsLR32k. Also download the stimuli as detailed at this repository.
 

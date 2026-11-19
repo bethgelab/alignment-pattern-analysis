@@ -10,6 +10,7 @@ They run against the real dataset and skip when it is not present.
 
 import hashlib
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from benedict import benedict
@@ -42,7 +43,7 @@ def _resolve(relative_path: str) -> Path:
     return path if path.exists() else Path("..") / relative_path
 
 
-def _build(split: str):
+def _build(split: Literal["train", "test"]):
     """Builds the BOLD Moments dataset for a split, skipping if data is absent."""
     config_path = _resolve(CONFIG_PATH)
     if not config_path.exists():
@@ -58,7 +59,7 @@ def _build(split: str):
 
 
 @pytest.mark.parametrize("split", ["train", "test"])
-def test_sample_ids_match_golden_ordering(split: str):
+def test_sample_ids_match_golden_ordering(split: Literal["train", "test"]):
     dataset = _build(split)
     expected = GOLDEN[split]
 
@@ -75,7 +76,7 @@ def test_sample_ids_match_golden_ordering(split: str):
 
 
 @pytest.mark.parametrize("split", ["train", "test"])
-def test_len_matches_sample_ids(split: str):
+def test_len_matches_sample_ids(split: Literal["train", "test"]):
     dataset = _build(split)
     assert len(dataset) == GOLDEN[split]["n"]
     assert len(dataset) == len(dataset.sample_ids)

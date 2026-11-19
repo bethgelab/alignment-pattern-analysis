@@ -43,12 +43,23 @@ fi
 
 mkdir -p "$SCRATCH/home"
 
-srun singularity exec \
-    --home "$SCRATCH/home" \
-    --pwd "$(pwd)" \
-    --bind "$SCRATCH" \
-    ${bind_args[@]+"${bind_args[@]}"} \
-    --env PYTHONPATH=multitasking \
+container_args=(
+    --home "$SCRATCH/home"
+    --pwd "$(pwd)"
+    --bind "$SCRATCH"
+    ${bind_args[@]+"${bind_args[@]}"}
+)
+
+# Jobs must run the copy of multitasking/ in this job directory, never an
+# installed one: the image carries no copy, and this fails the job if one appears.
+singularity exec "${container_args[@]}" "$CONTAINER" python -c '
+import os, sys, multitasking
+found = os.path.realpath(multitasking.__file__)
+if not found.startswith(os.path.realpath("multitasking") + os.sep):
+    sys.exit(f"multitasking imported from {found}, not from this job directory")
+'
+
+srun singularity exec "${container_args[@]}" \
     "$CONTAINER" \
         python -m multitasking.intersubject_consistency \
             --config "$CONFIG_PATH" \

@@ -51,12 +51,23 @@ if [ -n "${MULTITASKING_TORCH_HOME:-}" ]; then
     env_args+=(--env "TORCH_HOME=$MULTITASKING_TORCH_HOME")
 fi
 
-srun singularity exec --nv \
-    --home "$SCRATCH/home" \
-    --pwd "$(pwd)" \
-    --bind "$SCRATCH" \
-    ${bind_args[@]+"${bind_args[@]}"} \
-    --env PYTHONPATH=multitasking \
+container_args=(
+    --home "$SCRATCH/home"
+    --pwd "$(pwd)"
+    --bind "$SCRATCH"
+    ${bind_args[@]+"${bind_args[@]}"}
+)
+
+# Jobs must run the copy of multitasking/ in this job directory, never an
+# installed one: the image carries no copy, and this fails the job if one appears.
+singularity exec "${container_args[@]}" "$CONTAINER" python -c '
+import os, sys, multitasking
+found = os.path.realpath(multitasking.__file__)
+if not found.startswith(os.path.realpath("multitasking") + os.sep):
+    sys.exit(f"multitasking imported from {found}, not from this job directory")
+'
+
+srun singularity exec --nv "${container_args[@]}" \
     ${env_args[@]+"${env_args[@]}"} \
     "$CONTAINER" \
         python -m multitasking.benchmark \

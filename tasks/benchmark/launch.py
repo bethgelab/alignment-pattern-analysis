@@ -121,38 +121,29 @@ def run_benchmark(
 
 
 def prepare_container(output_path: Path):
-    """Links the two container images into the job directory.
-
-    The benchmark needs two images: models whose name starts with "mmaction2"
-    run in the mmaction2 image, every other model in the mmflow image. Both
-    are linked here as container_<variant>.sif. submit_jobs then picks the one
-    each model needs and passes that filename to run.sh as $CONTAINER.
-
-    Args:
-        output_path: The job directory to link the containers into.
+    """Links the container image into the job directory as container.sif.
 
     Raises:
-        FileNotFoundError: If a container variant is missing, naming where it
-            is expected.
+        FileNotFoundError: If singularity/multitasking.sif is missing.
     """
-    click.echo("Symlinking containers...")
-    for variant in ("mmflow", "mmaction2"):
-        source = PROJECT_ROOT / "singularity" / f"multitasking_{variant}.sif"
-        if not source.exists():
-            raise FileNotFoundError(
-                f"Container {source} not found. Build it from "
-                "singularity/container.def, or symlink an existing image to "
-                "that path."
-            )
-        os.symlink(source.resolve(), output_path / f"container_{variant}.sif")
+    click.echo("Symlinking container...")
+    source = PROJECT_ROOT / "singularity" / "multitasking.sif"
+    if not source.exists():
+        raise FileNotFoundError(
+            f"Container {source} not found. Build it from "
+            "singularity/container.def (see README.md)."
+        )
+    os.symlink(source.resolve(), output_path / "container.sif")
 
 
 def prepare_code(output_path: Path):
-    """Copies the code for running the benchmark."""
+    """Copies the code, and the dependency spec it was launched with."""
     click.echo("Copying code...")
     source = PROJECT_ROOT / "multitasking"
     destination = output_path / "multitasking"
     shutil.copytree(source, destination)
+    for name in ("pyproject.toml", "uv.lock"):
+        shutil.copy(PROJECT_ROOT / name, output_path / name)
 
 
 def prepare_configs(output_path: Path, base_config: benedict):
@@ -194,18 +185,12 @@ def submit_jobs(output_path: Path, job_name: str, exclude: str, dry_run: bool):
             [f"--{k} {v}" for k, v in extra_slurm_options.items()]
         )
 
-        container_variant = (
-            "mmaction2"
-            if config["feature_extraction"]["model"].startswith("mmaction2")
-            else "mmflow"
-        )
-
         config_path = config_path.relative_to(output_path)
 
         command = " ".join(
             [
                 f"CONFIG_PATH={config_path} ",
-                f"CONTAINER=container_{container_variant}.sif ",
+                "CONTAINER=container.sif ",
                 "sbatch ",
                 f"--job-name {job_name}/{config_path.stem} ",
                 f"--output logs/%j_{config_path.stem}.log ",
